@@ -388,7 +388,7 @@ const MarkdownPreview: FC<Props> = ({
 
           // DOM 挿入後に getComputedStyle でスタイルを読み取り PowerPoint 互換 SVG を生成。
           // 挿入前だと <style> の CSS が未適用のまま処理されてテキスト色が失われる。
-          const processedSvg = processSvgForPowerPoint(svgEl);
+          const processedSvg = processSvgForStandaloneUse(svgEl);
 
           actionsDiv.querySelector(".mermaid-copy-svg")?.addEventListener("click", () => {
             navigator.clipboard.writeText(processedSvg);
@@ -582,7 +582,7 @@ const MarkdownPreview: FC<Props> = ({
  *   B. <foreignObject> を SVG <text> 要素に変換（mermaid v11 がフローチャート以外で
  *      htmlLabels を無視して foreignObject を使う場合に対応）
  */
-function processSvgForPowerPoint(liveSvgEl: SVGSVGElement): string {
+export function processSvgForStandaloneUse(liveSvgEl: SVGSVGElement): string {
   const SVG_NS = "http://www.w3.org/2000/svg";
   const SAFE_FONT = "Meiryo, Yu Gothic, Segoe UI, Arial, sans-serif";
 
