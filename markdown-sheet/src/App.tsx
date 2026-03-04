@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
+import { readFile, readTextFile, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import FileTree from "./components/FileTree";
@@ -290,6 +290,32 @@ function App() {
     localStorage.setItem("md-auto-save", String(autoSave));
   }, [autoSave]);
 
+  // --- Office viewer ---
+  const [officeViewer, setOfficeViewer] = useState(
+    () => localStorage.getItem("md-office-viewer") === "true"
+  );
+  const [officeFileData, setOfficeFileData] = useState<Uint8Array | null>(null);
+  const [officeFileType, setOfficeFileType] = useState<string | null>(null);
+
+  const handleOfficeViewerChange = useCallback((enabled: boolean) => {
+    setOfficeViewer(enabled);
+    localStorage.setItem("md-office-viewer", String(enabled));
+  }, []);
+
+  // フォルダツリーをOffice設定変更時に再取得
+  useEffect(() => {
+    if (!folderPath) return;
+    (async () => {
+      try {
+        const entries: FileEntry[] = await invoke("get_file_tree", {
+          dirPath: folderPath,
+          includeOffice: officeViewer,
+        });
+        setFileTree(entries);
+      } catch { /* ignore */ }
+    })();
+  }, [officeViewer, folderPath]);
+
   // --- Recent files ---
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => {
     try {
@@ -441,6 +467,12 @@ function App() {
       setContentUndoAvailable(newTab.contentUndoStack.length > 0);
       setContentRedoAvailable(newTab.contentRedoStack.length > 0);
       reset(newTab.tables);
+      // Office状態をクリア（loadFile側で再設定される）
+      const officeExt = newTab.filePath ? getOfficeExt(newTab.filePath) : null;
+      if (!officeExt) {
+        setOfficeFileData(null);
+        setOfficeFileType(null);
+      }
     },
     [saveCurrentToTab, reset]
   );
@@ -501,16 +533,86 @@ function App() {
 
   // ====== File Loading ======
 
+  const OFFICE_EXTENSIONS = [".docx", ".xlsx", ".xlsm"];
+  const getOfficeExt = (filePath: string): string | null => {
+    const lower = filePath.toLowerCase();
+    return OFFICE_EXTENSIONS.find((ext) => lower.endsWith(ext)) ?? null;
+  };
+
   const loadFile = useCallback(
     async (filePath: string) => {
       // すでに開いているタブがあればそこに切り替える
       const existing = tabsRef.current.find((t) => t.filePath === filePath);
       if (existing) {
         switchToTab(existing.id);
+        // Officeファイルの場合はデータを再設定
+        const officeExt = getOfficeExt(filePath);
+        if (officeExt) {
+          try {
+            const bytes = await readFile(filePath);
+            setOfficeFileData(new Uint8Array(bytes));
+            setOfficeFileType(officeExt);
+          } catch { /* ignore */ }
+        } else {
+          setOfficeFileData(null);
+          setOfficeFileType(null);
+        }
         return;
       }
 
       try {
+        // Officeファイルの場合はバイナリ読み込み
+        const officeExt = getOfficeExt(filePath);
+        if (officeExt) {
+          const bytes = await readFile(filePath);
+          setOfficeFileData(new Uint8Array(bytes));
+          setOfficeFileType(officeExt);
+
+          const currentTab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+          const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
+
+          if (isCurrentEmpty) {
+            const currentId = activeTabIdRef.current;
+            setActiveFile(filePath);
+            setContent("");
+            setOriginalLines([]);
+            setDirty(false);
+            reset([]);
+            setTabs((prev) =>
+              prev.map((t) =>
+                t.id === currentId
+                  ? { ...t, filePath, content: "", originalLines: [], tables: [], dirty: false }
+                  : t
+              )
+            );
+          } else {
+            saveCurrentToTab();
+            const newTab: Tab = {
+              id: crypto.randomUUID(),
+              filePath,
+              content: "",
+              originalLines: [],
+              tables: [],
+              dirty: false,
+              contentUndoStack: [],
+              contentRedoStack: [],
+            };
+            setTabs((prev) => [...prev, newTab]);
+            setActiveTabId(newTab.id);
+            setContent("");
+            setOriginalLines([]);
+            setDirty(false);
+            setActiveFile(filePath);
+            reset([]);
+          }
+          addRecentFile(filePath);
+          return;
+        }
+
+        // Markdownファイル
+        setOfficeFileData(null);
+        setOfficeFileType(null);
+
         let doc: ParsedDocument;
         try {
           doc = await invoke("read_markdown_file", { filePath });
@@ -671,13 +773,14 @@ function App() {
     try {
       const entries: FileEntry[] = await invoke("get_file_tree", {
         dirPath: selected,
+        includeOffice: officeViewer,
       });
       setFileTree(entries);
       setFolderPath(selected);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
     }
-  }, []);
+  }, [officeViewer]);
 
   // --- File open ---
   const handleOpenFile = useCallback(async () => {
@@ -686,6 +789,7 @@ function App() {
       selected = await open({
         filters: [
           { name: "Markdown", extensions: ["md", "markdown", "txt"] },
+          ...(officeViewer ? [{ name: "Office", extensions: ["docx", "xlsx", "xlsm"] }] : []),
           { name: "All", extensions: ["*"] },
         ],
       });
@@ -696,7 +800,7 @@ function App() {
     }
     if (!selected) return;
     await loadFile(selected);
-  }, [loadFile]);
+  }, [loadFile, officeViewer]);
 
   // --- Save ---
   const handleSave = useCallback(async () => {
@@ -1417,12 +1521,13 @@ function App() {
 
           const mdExtensions = [".md", ".markdown", ".txt"];
           const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp"];
+          const officeExtensions = [".docx", ".xlsx", ".xlsm"];
 
           for (const filePath of paths) {
             const ext = filePath.toLowerCase().replace(/^.*(\.[^.]+)$/, "$1");
 
-            if (mdExtensions.includes(ext)) {
-              // Markdown ファイルは新タブで開く
+            if (mdExtensions.includes(ext) || officeExtensions.includes(ext)) {
+              // Markdown / Officeファイルは新タブで開く
               await loadFileRef.current(filePath);
             } else if (imageExtensions.includes(ext)) {
               // 画像ファイルはエディタにマークダウン画像構文を挿入
@@ -1546,6 +1651,9 @@ function App() {
     [editorRatio]
   );
 
+  // 現在のファイルがOfficeかどうか
+  const isOfficeFile = !!(officeFileData && officeFileType);
+
   // Toolbar に渡す canUndo/canRedo: モードに応じて content/table を切り替え
   const toolbarCanUndo = activeViewTab === "table" ? canUndo : contentUndoAvailable;
   const toolbarCanRedo = activeViewTab === "table" ? canRedo : contentRedoAvailable;
@@ -1602,21 +1710,23 @@ function App() {
         )
       )}
 
-      {/* View Tabs */}
-      <div className="view-tabs">
-        <button
-          className={`view-tab ${activeViewTab === "preview" ? "active" : ""}`}
-          onClick={() => handleViewTabChange("preview")}
-        >
-          プレビュー
-        </button>
-        <button
-          className={`view-tab ${activeViewTab === "table" ? "active" : ""}`}
-          onClick={() => handleViewTabChange("table")}
-        >
-          テーブル編集
-        </button>
-      </div>
+      {/* View Tabs (Officeファイル時は非表示) */}
+      {!isOfficeFile && (
+        <div className="view-tabs">
+          <button
+            className={`view-tab ${activeViewTab === "preview" ? "active" : ""}`}
+            onClick={() => handleViewTabChange("preview")}
+          >
+            プレビュー
+          </button>
+          <button
+            className={`view-tab ${activeViewTab === "table" ? "active" : ""}`}
+            onClick={() => handleViewTabChange("table")}
+          >
+            テーブル編集
+          </button>
+        </div>
+      )}
 
       <div className="app-body">
         {/* 左パネル（フォルダ / アウトライン） */}
@@ -1646,7 +1756,19 @@ function App() {
           )}
         </div>
 
-        {activeViewTab === "preview" ? (
+        {isOfficeFile ? (
+          /* Office mode: プレビューのみ（エディタなし） */
+          <div className="content-area" style={{ display: "flex", flexDirection: "row" }}>
+            <PreviewPanel
+              content=""
+              filePath={activeFile}
+              folderPath={folderPath}
+              theme={theme}
+              officeFileData={officeFileData}
+              officeFileType={officeFileType}
+            />
+          </div>
+        ) : activeViewTab === "preview" ? (
           /* Preview mode: Editor + Preview */
           <div
             className="content-area"
@@ -1811,6 +1933,8 @@ function App() {
               aiSettings={aiSettings}
               onUpdateMermaidBlock={handleUpdateMermaidBlock}
               theme={theme}
+              officeFileData={officeFileData}
+              officeFileType={officeFileType}
             />
           </div>
         ) : (
@@ -1839,6 +1963,8 @@ function App() {
           settings={aiSettings}
           onSave={handleSaveAiSettings}
           onClose={() => setShowSettings(false)}
+          officeViewer={officeViewer}
+          onOfficeViewerChange={handleOfficeViewerChange}
         />
       )}
 

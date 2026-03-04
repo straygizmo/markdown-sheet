@@ -23,9 +23,11 @@ interface Props {
   settings: AiSettings;
   onSave: (settings: AiSettings) => void;
   onClose: () => void;
+  officeViewer: boolean;
+  onOfficeViewerChange: (enabled: boolean) => void;
 }
 
-const Settings: FC<Props> = ({ settings, onSave, onClose }) => {
+const Settings: FC<Props> = ({ settings, onSave, onClose, officeViewer, onOfficeViewerChange }) => {
   const [local, setLocal] = useState<AiSettings>({ ...settings });
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -199,6 +201,18 @@ const Settings: FC<Props> = ({ settings, onSave, onClose }) => {
               </span>
             )}
           </div>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section-title">Officeビューア</div>
+          <label className="settings-toggle-row">
+            <span>Office文書 (.docx / .xlsx / .xlsm) をプレビュー表示</span>
+            <input
+              type="checkbox"
+              checked={officeViewer}
+              onChange={(e) => onOfficeViewerChange(e.target.checked)}
+            />
+          </label>
         </div>
 
         <div className="settings-footer">

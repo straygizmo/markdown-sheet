@@ -1,5 +1,6 @@
 import { useState } from "react";
 import MarkdownPreview from "./MarkdownPreview";
+import OfficePreview from "./OfficePreview";
 import Terminal from "./Terminal";
 import type { AiSettings } from "../types";
 import "./PreviewPanel.css";
@@ -12,6 +13,8 @@ interface Props {
   aiSettings?: AiSettings;
   onUpdateMermaidBlock?: (blockIndex: number, newSource: string) => void;
   theme: "light" | "dark";
+  officeFileData?: Uint8Array | null;
+  officeFileType?: string | null;
 }
 
 export default function PreviewPanel({
@@ -22,6 +25,8 @@ export default function PreviewPanel({
   aiSettings,
   onUpdateMermaidBlock,
   theme,
+  officeFileData,
+  officeFileType,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"preview" | "terminal">("preview");
 
@@ -29,6 +34,8 @@ export default function PreviewPanel({
   const cwd = filePath
     ? filePath.replace(/[\\/][^\\/]*$/, "")
     : folderPath ?? "C:\\";
+
+  const isOffice = officeFileData && officeFileType;
 
   return (
     <div className="preview-panel-wrapper">
@@ -48,13 +55,17 @@ export default function PreviewPanel({
       </div>
       <div className="preview-panel-content">
         <div style={{ display: activeTab === "preview" ? "contents" : "none" }}>
-          <MarkdownPreview
-            content={content}
-            filePath={filePath}
-            previewRef={previewRef}
-            aiSettings={aiSettings}
-            onUpdateMermaidBlock={onUpdateMermaidBlock}
-          />
+          {isOffice ? (
+            <OfficePreview data={officeFileData} fileType={officeFileType} theme={theme} />
+          ) : (
+            <MarkdownPreview
+              content={content}
+              filePath={filePath}
+              previewRef={previewRef}
+              aiSettings={aiSettings}
+              onUpdateMermaidBlock={onUpdateMermaidBlock}
+            />
+          )}
         </div>
         <div style={{
           display: activeTab === "terminal" ? "block" : "none",
