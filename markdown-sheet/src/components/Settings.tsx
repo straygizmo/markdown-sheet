@@ -82,7 +82,7 @@ const Settings: FC<Props> = ({ settings, onSave, onClose }) => {
           },
           body: JSON.stringify({
             messages: [{ role: "user", content: "hi" }],
-            max_tokens: 5,
+            max_completion_tokens: 5,
           }),
         });
         if (resp.ok) {
