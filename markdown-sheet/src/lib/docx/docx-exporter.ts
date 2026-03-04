@@ -9,6 +9,7 @@ import {
   Packer,
   Paragraph,
   TextRun,
+  ImageRun,
   HeadingLevel,
   AlignmentType,
   BorderStyle,
@@ -26,6 +27,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { visit } from 'unist-util-visit';
 import { loadThemeForDOCX } from './theme-loader';
+import { calculateImageDimensions } from './docx-image-utils';
 import { mathJaxReady, convertLatex2Math } from './docx-math-converter';
 import { createCodeHighlighter, type CodeHighlighter } from './docx-code-highlighter';
 import { createTableConverter, type TableConverter } from './docx-table-converter';
@@ -50,7 +52,23 @@ import type {
 export interface ExportDocxOptions {
   /** Base directory for resolving relative image paths */
   baseDir?: string;
+  /** Pre-rendered mermaid SVG strings extracted from the preview DOM (one per mermaid block, null if render failed) */
+  mermaidSvgs?: (string | null)[];
+  /** UI font key from preview settings (e.g. "meiryo", "yugothic"). Overrides the theme font. */
+  fontKey?: string;
 }
+
+// Maps the UI font selector keys to DOCX font properties
+const DOCX_FONT_KEY_MAP: Record<string, { ascii: string; eastAsia: string }> = {
+  system:   { ascii: 'Segoe UI',    eastAsia: 'Meiryo' },
+  meiryo:   { ascii: 'Meiryo',      eastAsia: 'Meiryo' },
+  pgothic:  { ascii: 'MS PGothic',  eastAsia: 'MS PGothic' },
+  yugothic: { ascii: 'Yu Gothic',   eastAsia: 'Yu Gothic' },
+  yumin:    { ascii: 'Yu Mincho',   eastAsia: 'Yu Mincho' },
+  msmin:    { ascii: 'MS PMincho',  eastAsia: 'MS PMincho' },
+  serif:    { ascii: 'Georgia',     eastAsia: 'Yu Mincho' },
+  mono:     { ascii: 'Consolas',    eastAsia: 'Meiryo' },
+};
 
 // ============================================================================
 // Image fetching
@@ -191,6 +209,18 @@ export async function exportMarkdownToDocx(
   // Load theme
   const themeStyles = await loadThemeForDOCX('default');
 
+  // Override font if the user selected a specific font in the UI
+  if (options.fontKey && DOCX_FONT_KEY_MAP[options.fontKey]) {
+    const { ascii, eastAsia } = DOCX_FONT_KEY_MAP[options.fontKey];
+    const docxFont = { ascii, eastAsia, hAnsi: ascii, cs: ascii };
+    // Override body default font
+    themeStyles.default.run.font = docxFont;
+    // Override heading fonts
+    for (const style of Object.values(themeStyles.paragraphStyles)) {
+      style.run.font = docxFont;
+    }
+  }
+
   // Initialize MathJax
   await mathJaxReady();
 
@@ -233,6 +263,149 @@ export async function exportMarkdownToDocx(
     incrementListInstanceCounter: () => listInstanceCounter++,
   });
 
+  // ---- Mermaid rendering ----
+  // Uses pre-rendered SVGs from the preview DOM (passed via options.mermaidSvgs)
+  // instead of calling mermaid.render() which can hang or fail in the export context.
+
+  let mermaidBlockIndex = 0;
+
+  function mermaidFallbackParagraph(code: string): Paragraph {
+    try {
+      const codeHighlightRuns = codeHighlighter.getHighlightedRunsForCode(code, 'mermaid');
+      return new Paragraph({
+        children: codeHighlightRuns,
+        wordWrap: true,
+        alignment: AlignmentType.LEFT,
+        spacing: { before: 200, after: 200 },
+        shading: { fill: themeStyles.characterStyles?.code?.background || 'F6F8FA' },
+        border: {
+          top: { color: 'E1E4E8', space: 10, style: BorderStyle.SINGLE, size: 6 },
+          bottom: { color: 'E1E4E8', space: 10, style: BorderStyle.SINGLE, size: 6 },
+          left: { color: 'E1E4E8', space: 10, style: BorderStyle.SINGLE, size: 6 },
+          right: { color: 'E1E4E8', space: 10, style: BorderStyle.SINGLE, size: 6 },
+        },
+      });
+    } catch {
+      return new Paragraph({
+        children: [new TextRun({ text: code, font: 'Consolas', size: 20 })],
+        spacing: { before: 200, after: 200 },
+      });
+    }
+  }
+
+  async function convertMermaidBlock(code: string): Promise<Paragraph> {
+    const svgString = options.mermaidSvgs?.[mermaidBlockIndex] ?? null;
+    mermaidBlockIndex++;
+
+    if (!svgString) {
+      return mermaidFallbackParagraph(code);
+    }
+
+    try {
+      const pngBuffer = await svgToPngBuffer(svgString);
+      if (!pngBuffer || pngBuffer.length === 0) {
+        throw new Error('Empty PNG buffer from SVG conversion');
+      }
+
+      const { width: origW, height: origH } = await getImageDimensionsFromBuffer(pngBuffer);
+      if (origW === 0 || origH === 0) {
+        throw new Error('Zero dimensions from mermaid PNG');
+      }
+
+      const displayW = Math.round(origW / 4);
+      const displayH = Math.round(origH / 4);
+      const { width, height } = calculateImageDimensions(displayW, displayH);
+
+      return new Paragraph({
+        children: [
+          new ImageRun({
+            data: pngBuffer,
+            transformation: { width: width || 100, height: height || 100 },
+            type: 'png',
+            altText: {
+              title: 'Mermaid Diagram',
+              description: code.slice(0, 100),
+              name: 'mermaid-diagram',
+            },
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 200, after: 200 },
+      });
+    } catch (error) {
+      console.warn('[DOCX] Mermaid SVG-to-PNG failed:', error);
+      return mermaidFallbackParagraph(code);
+    }
+  }
+
+  function svgToPngBuffer(svgString: string): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error('SVG to PNG conversion timed out'));
+      }, 10000);
+
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        try {
+          const scale = 2;
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext('2d')!;
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0);
+
+          canvas.toBlob((blob) => {
+            clearTimeout(timeoutId);
+            if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+            blob.arrayBuffer().then(ab => resolve(new Uint8Array(ab))).catch(reject);
+          }, 'image/png');
+        } catch (err) {
+          clearTimeout(timeoutId);
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      };
+
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load SVG for Mermaid rendering'));
+      };
+
+      img.src = url;
+    });
+  }
+
+  function getImageDimensionsFromBuffer(buffer: Uint8Array): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Image dimension read timed out'));
+      }, 5000);
+
+      const blob = new Blob([buffer as BlobPart], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        URL.revokeObjectURL(url);
+        resolve({ width: img.width, height: img.height });
+      };
+
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to read image dimensions'));
+      };
+
+      img.src = url;
+    });
+  }
+
   // ---- Recursive node converter ----
 
   async function convertNode(
@@ -241,6 +414,11 @@ export async function exportMarkdownToDocx(
     listLevel = 0,
     blockquoteNestLevel = 0
   ): Promise<FileChild | FileChild[] | null> {
+    // Mermaid code blocks → render as image
+    if (node.type === 'code' && node.lang === 'mermaid') {
+      return await convertMermaidBlock(node.value ?? '');
+    }
+
     switch (node.type) {
       case 'heading':
         return await convertHeading(node);

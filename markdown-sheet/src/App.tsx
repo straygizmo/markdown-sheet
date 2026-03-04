@@ -930,8 +930,34 @@ function App() {
         defaultPath: `${title.replace(/\.md$/i, "")}.docx`,
       });
       if (path) {
+        // Extract pre-rendered mermaid SVGs from preview DOM.
+        // processSvgForStandaloneUse inlines computed styles, converts
+        // <foreignObject> to <text>, and removes <style> blocks so the
+        // SVG can be loaded into an <img> for canvas rendering.
+        const { processSvgForStandaloneUse } = await import("./components/MarkdownPreview");
+        const mermaidSvgs: (string | null)[] = [];
+        const previewEl = previewRef.current;
+        if (previewEl) {
+          const placeholders = previewEl.querySelectorAll(".mermaid-placeholder");
+          for (const ph of Array.from(placeholders)) {
+            const svg = ph.querySelector(".mermaid-rendered svg") as SVGSVGElement | null;
+            if (svg) {
+              try {
+                mermaidSvgs.push(processSvgForStandaloneUse(svg));
+              } catch {
+                mermaidSvgs.push(null);
+              }
+            } else {
+              mermaidSvgs.push(null);
+            }
+          }
+        }
+
+        const fontKey = localStorage.getItem("md-preview-font") || "meiryo";
         const docxData = await exportMarkdownToDocx(content, {
           baseDir: activeFile || undefined,
+          mermaidSvgs,
+          fontKey,
         });
         await writeFile(path, docxData);
         showToast("DOCXをエクスポートしました");
