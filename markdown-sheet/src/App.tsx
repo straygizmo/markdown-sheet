@@ -4,7 +4,7 @@ import { readTextFile, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import FileTree from "./components/FileTree";
-import MarkdownPreview from "./components/MarkdownPreview";
+import PreviewPanel from "./components/PreviewPanel";
 import Settings from "./components/Settings";
 import OutlinePanel from "./components/OutlinePanel";
 import SearchReplace from "./components/SearchReplace";
@@ -12,6 +12,7 @@ import StatusBar from "./components/StatusBar";
 import TabBar from "./components/TabBar";
 import TableEditor from "./components/TableEditor";
 import Toolbar from "./components/Toolbar";
+import { useFileWatcher } from "./hooks/useFileWatcher";
 import { useTableEditor } from "./hooks/useTableEditor";
 import { callAI } from "./lib/callAI";
 import { makeHeadingId } from "./lib/headingId";
@@ -587,12 +588,16 @@ function App() {
     [reset, switchToTab, addRecentFile, saveCurrentToTab]
   );
 
+  // --- Self-write guard for file watcher feedback loop prevention ---
+  const lastWriteRef = useRef<number>(0);
+
   // --- Auto-save interval ---
   useEffect(() => {
     if (!autoSave) return;
     const iv = setInterval(async () => {
       if (dirtyRef.current && activeFile) {
         try {
+          lastWriteRef.current = Date.now();
           await writeTextFile(activeFile, contentRef.current);
           setDirty(false);
           const currentId = activeTabIdRef.current;
@@ -605,6 +610,51 @@ function App() {
     }, 30_000);
     return () => clearInterval(iv);
   }, [autoSave, activeFile]);
+
+  useFileWatcher(activeFile, useCallback(async (changedPath: string) => {
+    // Ignore changes triggered by our own writes (within 2s)
+    if (Date.now() - lastWriteRef.current < 2000) return;
+
+    const currentFile = activeFile;
+    if (!currentFile) return;
+
+    // Normalize paths for comparison
+    const normalize = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+    if (normalize(changedPath) !== normalize(currentFile)) return;
+
+    if (dirtyRef.current) {
+      showToast("外部でファイルが変更されました（未保存の変更があるため再読み込みしません）");
+      return;
+    }
+
+    try {
+      const text = await readTextFile(currentFile);
+      const doc = parseMarkdown(text);
+      setContent(text);
+      setOriginalLines(doc.lines);
+      reset(doc.tables);
+      setDirty(false);
+
+      // Update tab data
+      const currentId = activeTabIdRef.current;
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === currentId
+            ? {
+                ...t,
+                content: text,
+                originalLines: doc.lines,
+                tables: structuredClone(doc.tables),
+                dirty: false,
+              }
+            : t
+        )
+      );
+      showToast("外部変更を検知し再読み込みしました");
+    } catch (e) {
+      console.error("External file reload failed:", e);
+    }
+  }, [activeFile, reset]));
 
   // --- Folder open ---
   const handleOpenFolder = useCallback(async () => {
@@ -650,6 +700,7 @@ function App() {
   const handleSave = useCallback(async () => {
     if (!activeFile) return;
     try {
+      lastWriteRef.current = Date.now();
       if (activeViewTab === "table") {
         await invoke("save_markdown_file", {
           filePath: activeFile,
@@ -671,6 +722,7 @@ function App() {
           activeViewTab === "table"
             ? rebuildDocument(originalLines, tables)
             : content;
+        lastWriteRef.current = Date.now();
         await writeTextFile(activeFile, text);
         setDirty(false);
         showToast("保存しました");
@@ -699,6 +751,7 @@ function App() {
         activeViewTab === "table"
           ? rebuildDocument(originalLines, tables)
           : content;
+      lastWriteRef.current = Date.now();
       await writeTextFile(selected, text);
       setActiveFile(selected);
       setDirty(false);
@@ -1748,12 +1801,13 @@ function App() {
                 <div className="divider" onMouseDown={handleMouseDown} />
               </>
             )}
-            <MarkdownPreview
+            <PreviewPanel
               content={content}
               filePath={activeFile}
               previewRef={previewRef}
               aiSettings={aiSettings}
               onUpdateMermaidBlock={handleUpdateMermaidBlock}
+              theme={theme}
             />
           </div>
         ) : (
