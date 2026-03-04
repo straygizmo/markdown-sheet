@@ -272,6 +272,7 @@ function App() {
 
   // --- File state (working copy of active tab) ---
   const [fileTree, setFileTree] = useState<FileEntry[]>([]);
+  const [folderPath, setFolderPath] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [content, setContent] = useState(""); // raw markdown
   const [originalLines, setOriginalLines] = useState<string[]>([]);
@@ -672,6 +673,7 @@ function App() {
         dirPath: selected,
       });
       setFileTree(entries);
+      setFolderPath(selected);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
     }
@@ -1804,6 +1806,7 @@ function App() {
             <PreviewPanel
               content={content}
               filePath={activeFile}
+              folderPath={folderPath}
               previewRef={previewRef}
               aiSettings={aiSettings}
               onUpdateMermaidBlock={handleUpdateMermaidBlock}

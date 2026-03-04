@@ -7,6 +7,7 @@ import "./PreviewPanel.css";
 interface Props {
   content: string;
   filePath?: string | null;
+  folderPath?: string | null;
   previewRef?: React.RefObject<HTMLDivElement | null>;
   aiSettings?: AiSettings;
   onUpdateMermaidBlock?: (blockIndex: number, newSource: string) => void;
@@ -16,6 +17,7 @@ interface Props {
 export default function PreviewPanel({
   content,
   filePath,
+  folderPath,
   previewRef,
   aiSettings,
   onUpdateMermaidBlock,
@@ -23,10 +25,10 @@ export default function PreviewPanel({
 }: Props) {
   const [activeTab, setActiveTab] = useState<"preview" | "terminal">("preview");
 
-  // Extract directory from filePath for terminal cwd
+  // Extract directory from filePath for terminal cwd, fall back to open folder path
   const cwd = filePath
     ? filePath.replace(/[\\/][^\\/]*$/, "")
-    : "C:\\";
+    : folderPath ?? "C:\\";
 
   return (
     <div className="preview-panel-wrapper">

@@ -70,6 +70,48 @@ export default function Terminal({ cwd, visible, theme }: Props) {
   const initializedRef = useRef(false);
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
+  const unlistenOutputRef = useRef<(() => void) | null>(null);
+  const unlistenExitRef = useRef<(() => void) | null>(null);
+
+  // Spawn (or respawn) PTY session with current cwd
+  const spawnPty = async (xterm: XTerm) => {
+    // Kill existing session if any
+    if (sessionIdRef.current) {
+      const oldId = sessionIdRef.current;
+      sessionIdRef.current = null;
+      unlistenOutputRef.current?.();
+      unlistenExitRef.current?.();
+      unlistenOutputRef.current = null;
+      unlistenExitRef.current = null;
+      await invoke("kill_pty", { sessionId: oldId }).catch(() => {});
+    }
+
+    try {
+      const id = await invoke<string>("spawn_pty", {
+        cwd: cwdRef.current,
+        cols: xterm.cols,
+        rows: xterm.rows,
+      });
+      sessionIdRef.current = id;
+
+      // Listen for PTY output
+      unlistenOutputRef.current = await listen<string>(`pty-output-${id}`, (event) => {
+        const bytes = Uint8Array.from(atob(event.payload), (c) => c.charCodeAt(0));
+        xterm.write(bytes);
+      });
+
+      // Listen for PTY exit
+      unlistenExitRef.current = await listen<void>(`pty-exit-${id}`, () => {
+        xterm.write("\r\n[Process exited]\r\n");
+        unlistenOutputRef.current?.();
+        unlistenExitRef.current?.();
+        unlistenOutputRef.current = null;
+        unlistenExitRef.current = null;
+      });
+    } catch (e) {
+      xterm.write(`\r\nFailed to start terminal: ${e}\r\n`);
+    }
+  };
 
   // Initialize terminal on mount
   useEffect(() => {
@@ -99,56 +141,42 @@ export default function Terminal({ cwd, visible, theme }: Props) {
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    // Spawn PTY
-    const startPty = async () => {
-      try {
-        const id = await invoke<string>("spawn_pty", {
-          cwd: cwdRef.current,
-          cols: xterm.cols,
-          rows: xterm.rows,
-        });
-        sessionIdRef.current = id;
-
-        // Listen for PTY output
-        const unlistenOutput = await listen<string>(`pty-output-${id}`, (event) => {
-          const bytes = Uint8Array.from(atob(event.payload), (c) => c.charCodeAt(0));
-          xterm.write(bytes);
-        });
-
-        // Listen for PTY exit
-        const unlistenExit = await listen<void>(`pty-exit-${id}`, () => {
-          xterm.write("\r\n[Process exited]\r\n");
-          unlistenOutput();
-          unlistenExit();
-        });
-
-        // Send input from xterm to PTY
-        xterm.onData((data) => {
-          if (sessionIdRef.current) {
-            invoke("write_to_pty", {
-              sessionId: sessionIdRef.current,
-              data,
-            }).catch(() => {});
-          }
-        });
-      } catch (e) {
-        xterm.write(`\r\nFailed to start terminal: ${e}\r\n`);
+    // Send input from xterm to PTY
+    xterm.onData((data) => {
+      if (sessionIdRef.current) {
+        invoke("write_to_pty", {
+          sessionId: sessionIdRef.current,
+          data,
+        }).catch(() => {});
       }
-    };
+    });
 
-    startPty();
+    spawnPty(xterm);
 
     return () => {
       if (sessionIdRef.current) {
         invoke("kill_pty", { sessionId: sessionIdRef.current }).catch(() => {});
         sessionIdRef.current = null;
       }
+      unlistenOutputRef.current?.();
+      unlistenExitRef.current?.();
       xterm.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
       initializedRef.current = false;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Restart PTY when cwd changes
+  const prevCwdRef = useRef(cwd);
+  useEffect(() => {
+    if (prevCwdRef.current === cwd) return;
+    prevCwdRef.current = cwd;
+    if (xtermRef.current) {
+      xtermRef.current.clear();
+      spawnPty(xtermRef.current);
+    }
+  }, [cwd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Theme update
   useEffect(() => {
