@@ -4,6 +4,7 @@ import { readFile, readTextFile, writeTextFile, writeFile } from "@tauri-apps/pl
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import FileTree from "./components/FileTree";
+import MindmapEditor from "./components/MindmapEditor";
 import PreviewPanel from "./components/PreviewPanel";
 import Settings from "./components/Settings";
 import OutlinePanel from "./components/OutlinePanel";
@@ -18,6 +19,7 @@ import { useTableEditor } from "./hooks/useTableEditor";
 import { callAI } from "./lib/callAI";
 import { makeHeadingId } from "./lib/headingId";
 import { parseMarkdown, rebuildDocument } from "./lib/markdownParser";
+import type { KityMinderJson } from "./lib/mindmapTypes";
 import type { AiSettings, FileEntry, MarkdownTable, ParsedDocument, RecentFile, RecentFolder, Tab } from "./types";
 
 // ========== AI & Template Constants ==========
@@ -296,6 +298,10 @@ function App() {
   const [officeFileData, setOfficeFileData] = useState<Uint8Array | null>(null);
   const [officeFileType, setOfficeFileType] = useState<string | null>(null);
 
+  // --- Mindmap editor ---
+  const [mindmapFileData, setMindmapFileData] = useState<Uint8Array | null>(null);
+  const [mindmapFileType, setMindmapFileType] = useState<string | null>(null);
+
   // --- File type filters ---
   const migrateOld = localStorage.getItem("md-office-viewer") === "true";
   const [filterDocx, setFilterDocx] = useState(
@@ -523,21 +529,38 @@ function App() {
       setContentUndoAvailable(newTab.contentUndoStack.length > 0);
       setContentRedoAvailable(newTab.contentRedoStack.length > 0);
       reset(newTab.tables);
-      // Officeファイルの場合はデータを再読み込み、それ以外はクリア
+      // Officeファイル/マインドマップの場合はデータを再読み込み、それ以外はクリア
       const officeExt = newTab.filePath ? getOfficeExt(newTab.filePath) : null;
+      const mmExt = newTab.filePath ? getMindmapExt(newTab.filePath) : null;
       if (officeExt && newTab.filePath) {
         readFile(newTab.filePath)
           .then((bytes) => {
             setOfficeFileData(new Uint8Array(bytes));
             setOfficeFileType(officeExt);
+            setMindmapFileData(null);
+            setMindmapFileType(null);
           })
           .catch(() => {
             setOfficeFileData(null);
             setOfficeFileType(null);
           });
+      } else if (mmExt && newTab.filePath) {
+        readFile(newTab.filePath)
+          .then((bytes) => {
+            setMindmapFileData(new Uint8Array(bytes));
+            setMindmapFileType(mmExt);
+            setOfficeFileData(null);
+            setOfficeFileType(null);
+          })
+          .catch(() => {
+            setMindmapFileData(null);
+            setMindmapFileType(null);
+          });
       } else {
         setOfficeFileData(null);
         setOfficeFileType(null);
+        setMindmapFileData(null);
+        setMindmapFileType(null);
       }
     },
     [saveCurrentToTab, reset]
@@ -599,10 +622,15 @@ function App() {
 
   // ====== File Loading ======
 
-  const OFFICE_EXTENSIONS = [".docx", ".xlsx", ".xlsm", ".km"];
+  const OFFICE_EXTENSIONS = [".docx", ".xlsx", ".xlsm"];
+  const MINDMAP_EXTENSIONS = [".km", ".xmind"];
   const getOfficeExt = (filePath: string): string | null => {
     const lower = filePath.toLowerCase();
     return OFFICE_EXTENSIONS.find((ext) => lower.endsWith(ext)) ?? null;
+  };
+  const getMindmapExt = (filePath: string): string | null => {
+    const lower = filePath.toLowerCase();
+    return MINDMAP_EXTENSIONS.find((ext) => lower.endsWith(ext)) ?? null;
   };
 
   const loadFile = useCallback(
@@ -611,17 +639,30 @@ function App() {
       const existing = tabsRef.current.find((t) => t.filePath === filePath);
       if (existing) {
         switchToTab(existing.id);
-        // Officeファイルの場合はデータを再設定
+        // Officeファイル/マインドマップの場合はデータを再設定
         const officeExt = getOfficeExt(filePath);
+        const mmExt = getMindmapExt(filePath);
         if (officeExt) {
           try {
             const bytes = await readFile(filePath);
             setOfficeFileData(new Uint8Array(bytes));
             setOfficeFileType(officeExt);
+            setMindmapFileData(null);
+            setMindmapFileType(null);
+          } catch { /* ignore */ }
+        } else if (mmExt) {
+          try {
+            const bytes = await readFile(filePath);
+            setMindmapFileData(new Uint8Array(bytes));
+            setMindmapFileType(mmExt);
+            setOfficeFileData(null);
+            setOfficeFileType(null);
           } catch { /* ignore */ }
         } else {
           setOfficeFileData(null);
           setOfficeFileType(null);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
         }
         return;
       }
@@ -633,6 +674,58 @@ function App() {
           const bytes = await readFile(filePath);
           setOfficeFileData(new Uint8Array(bytes));
           setOfficeFileType(officeExt);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
+
+          const currentTab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+          const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
+
+          if (isCurrentEmpty) {
+            const currentId = activeTabIdRef.current;
+            setActiveFile(filePath);
+            setContent("");
+            setOriginalLines([]);
+            setDirty(false);
+            reset([]);
+            setTabs((prev) =>
+              prev.map((t) =>
+                t.id === currentId
+                  ? { ...t, filePath, content: "", originalLines: [], tables: [], dirty: false }
+                  : t
+              )
+            );
+          } else {
+            saveCurrentToTab();
+            const newTab: Tab = {
+              id: crypto.randomUUID(),
+              filePath,
+              content: "",
+              originalLines: [],
+              tables: [],
+              dirty: false,
+              contentUndoStack: [],
+              contentRedoStack: [],
+            };
+            setTabs((prev) => [...prev, newTab]);
+            setActiveTabId(newTab.id);
+            setContent("");
+            setOriginalLines([]);
+            setDirty(false);
+            setActiveFile(filePath);
+            reset([]);
+          }
+          addRecentFile(filePath);
+          return;
+        }
+
+        // マインドマップファイルの場合はバイナリ読み込み
+        const mmExt = getMindmapExt(filePath);
+        if (mmExt) {
+          const bytes = await readFile(filePath);
+          setMindmapFileData(new Uint8Array(bytes));
+          setMindmapFileType(mmExt);
+          setOfficeFileData(null);
+          setOfficeFileType(null);
 
           const currentTab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
           const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
@@ -678,6 +771,8 @@ function App() {
         // Markdownファイル
         setOfficeFileData(null);
         setOfficeFileType(null);
+        setMindmapFileData(null);
+        setMindmapFileType(null);
 
         let doc: ParsedDocument;
         try {
@@ -764,7 +859,7 @@ function App() {
   useEffect(() => {
     if (!autoSave) return;
     const iv = setInterval(async () => {
-      if (dirtyRef.current && activeFile) {
+      if (dirtyRef.current && activeFile && !getMindmapExt(activeFile) && !getOfficeExt(activeFile)) {
         try {
           lastWriteRef.current = Date.now();
           await writeTextFile(activeFile, contentRef.current);
@@ -876,7 +971,7 @@ function App() {
       const officeExts: string[] = [];
       if (filterDocx) officeExts.push("docx");
       if (filterXls) officeExts.push("xlsx", "xlsm");
-      if (filterKm) officeExts.push("km");
+      if (filterKm) officeExts.push("km", "xmind");
       selected = await open({
         filters: [
           { name: "Markdown", extensions: ["md", "markdown", "txt"] },
@@ -965,6 +1060,34 @@ function App() {
       showToast("保存に失敗しました", true);
     }
   }, [activeViewTab, originalLines, tables, content, addRecentFile]);
+
+  // --- Mindmap save ---
+  const handleMindmapSave = useCallback(async (json: KityMinderJson) => {
+    if (!activeFile) return;
+    try {
+      lastWriteRef.current = Date.now();
+      const jsonStr = JSON.stringify(json, null, 2);
+      // Always save as .km format (JSON)
+      const savePath = activeFile.toLowerCase().endsWith(".xmind")
+        ? activeFile.replace(/\.xmind$/i, ".km")
+        : activeFile;
+      await writeTextFile(savePath, jsonStr);
+      setDirty(false);
+      const currentId = activeTabIdRef.current;
+      setTabs((prev) =>
+        prev.map((t) => (t.id === currentId ? { ...t, dirty: false, filePath: savePath } : t))
+      );
+      if (savePath !== activeFile) {
+        setActiveFile(savePath);
+        showToast(`${savePath.split(/[\\/]/).pop()} に保存しました（.km形式）`);
+      } else {
+        showToast("保存しました");
+      }
+    } catch (e) {
+      console.error("マインドマップ保存エラー:", e);
+      showToast("保存に失敗しました", true);
+    }
+  }, [activeFile]);
 
   // --- Apply content (undo/redo スタックを経由しない低レベル更新) ---
   const applyContent = useCallback(
@@ -1775,6 +1898,7 @@ function App() {
 
   // 現在のファイルがOfficeかどうか
   const isOfficeFile = !!(officeFileData && officeFileType);
+  const isMindmap = !!(mindmapFileData && mindmapFileType && activeFile);
 
   // Toolbar に渡す canUndo/canRedo: モードに応じて content/table を切り替え
   const toolbarCanUndo = activeViewTab === "table" ? canUndo : contentUndoAvailable;
@@ -1836,8 +1960,8 @@ function App() {
         )
       )}
 
-      {/* View Tabs (Officeファイル時は非表示) */}
-      {!isOfficeFile && (
+      {/* View Tabs (Office/マインドマップファイル時は非表示) */}
+      {!isOfficeFile && !isMindmap && (
         <div className="view-tabs">
           <button
             className={`view-tab ${activeViewTab === "preview" ? "active" : ""}`}
@@ -1889,7 +2013,25 @@ function App() {
           )}
         </div>
 
-        {isOfficeFile ? (
+        {isMindmap ? (
+          /* Mindmap mode: マインドマップエディタ */
+          <div className="content-area" style={{ display: "flex", flexDirection: "row" }}>
+            <MindmapEditor
+              fileData={mindmapFileData}
+              fileType={mindmapFileType}
+              filePath={activeFile}
+              theme={theme}
+              onSave={handleMindmapSave}
+              onDirtyChange={(d) => {
+                setDirty(d);
+                const currentId = activeTabIdRef.current;
+                setTabs((prev) =>
+                  prev.map((t) => (t.id === currentId ? { ...t, dirty: d } : t))
+                );
+              }}
+            />
+          </div>
+        ) : isOfficeFile ? (
           /* Office mode: プレビューのみ（エディタなし） */
           <div className="content-area" style={{ display: "flex", flexDirection: "row" }}>
             <PreviewPanel

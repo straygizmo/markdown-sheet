@@ -24,7 +24,7 @@ fn is_target_file(name: &str, include_docx: bool, include_xls: bool, include_km:
     if include_xls && (lower.ends_with(".xlsx") || lower.ends_with(".xlsm")) {
         return true;
     }
-    if include_km && lower.ends_with(".km") {
+    if include_km && (lower.ends_with(".km") || lower.ends_with(".xmind")) {
         return true;
     }
     false

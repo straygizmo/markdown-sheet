@@ -1,0 +1,38 @@
+.mindmap-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mindmap-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+/* Ensure kityminder SVG fills the container */
+.mindmap-container > svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.mindmap-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--accent-red);
+  font-size: 14px;
+  padding: 20px;
+}
+
+/* Override kityminder key receiver to be invisible */
+.mindmap-container .km-receiver {
+  position: absolute;
+  left: -99999px;
+  top: -99999px;
+}

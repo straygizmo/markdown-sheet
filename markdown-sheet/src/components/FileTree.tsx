@@ -107,9 +107,9 @@ const FileTree: FC<Props> = ({
         <button
           className={`file-tree-filter-btn ${filterKm ? "active" : ""}`}
           onClick={onToggleKm}
-          title=".km 表示切替"
+          title=".km/.xmind 表示切替"
         >
-          .km
+          .km/.xmind
         </button>
       </div>
       <div className="file-tree">
