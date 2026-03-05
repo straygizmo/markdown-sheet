@@ -253,7 +253,7 @@ body {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 3px 8px;
+  padding: 2px 8px;
   background: var(--bg-overlay);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
@@ -275,7 +275,7 @@ body {
   font-family: var(--font-main);
   display: inline-flex;
   align-items: center;
-  height: 22px;
+  height: 20px;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
   white-space: nowrap;
   flex-shrink: 0;
