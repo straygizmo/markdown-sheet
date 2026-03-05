@@ -3,22 +3,21 @@
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  background: var(--bg-surface);
+  background: var(--bg-overlay);
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
-  min-height: 36px;
 }
 
 .mm-tb-btn {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-input);
   color: var(--text);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
