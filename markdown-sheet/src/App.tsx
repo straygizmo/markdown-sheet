@@ -1029,8 +1029,11 @@ function App() {
   const handleSaveAs = useCallback(async () => {
     let selected: string | null = null;
     try {
+      const isKm = activeFile?.toLowerCase().endsWith(".km");
       selected = await save({
-        filters: [{ name: "Markdown", extensions: ["md"] }],
+        filters: isKm
+          ? [{ name: "Mindmap", extensions: ["km"] }]
+          : [{ name: "Markdown", extensions: ["md"] }],
       });
     } catch (e) {
       console.error("ダイアログエラー:", e);
@@ -1059,7 +1062,7 @@ function App() {
       console.error("保存エラー:", e);
       showToast("保存に失敗しました", true);
     }
-  }, [activeViewTab, originalLines, tables, content, addRecentFile]);
+  }, [activeFile, activeViewTab, originalLines, tables, content, addRecentFile]);
 
   // --- Mindmap save ---
   const handleMindmapSave = useCallback(async (json: KityMinderJson) => {
