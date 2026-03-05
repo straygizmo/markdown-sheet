@@ -13,6 +13,9 @@ interface Props {
   onToggleDocx: () => void;
   onToggleXls: () => void;
   onToggleKm: () => void;
+  showDocxBtn?: boolean;
+  showXlsBtn?: boolean;
+  showKmBtn?: boolean;
 }
 
 const FileTreeNode: FC<{
@@ -71,6 +74,9 @@ const FileTree: FC<Props> = ({
   onToggleDocx,
   onToggleXls,
   onToggleKm,
+  showDocxBtn = true,
+  showXlsBtn = true,
+  showKmBtn = true,
 }) => {
   return (
     <>
@@ -90,27 +96,33 @@ const FileTree: FC<Props> = ({
         >
           .md
         </button>
-        <button
-          className={`file-tree-filter-btn ${filterDocx ? "active" : ""}`}
-          onClick={onToggleDocx}
-          title=".docx 表示切替"
-        >
-          .docx
-        </button>
-        <button
-          className={`file-tree-filter-btn ${filterXls ? "active" : ""}`}
-          onClick={onToggleXls}
-          title=".xlsx/.xlsm 表示切替"
-        >
-          .xls*
-        </button>
-        <button
-          className={`file-tree-filter-btn ${filterKm ? "active" : ""}`}
-          onClick={onToggleKm}
-          title=".km/.xmind 表示切替"
-        >
-          .km/.xmind
-        </button>
+        {showDocxBtn && (
+          <button
+            className={`file-tree-filter-btn ${filterDocx ? "active" : ""}`}
+            onClick={onToggleDocx}
+            title=".docx 表示切替"
+          >
+            .docx
+          </button>
+        )}
+        {showXlsBtn && (
+          <button
+            className={`file-tree-filter-btn ${filterXls ? "active" : ""}`}
+            onClick={onToggleXls}
+            title=".xlsx/.xlsm 表示切替"
+          >
+            .xls*
+          </button>
+        )}
+        {showKmBtn && (
+          <button
+            className={`file-tree-filter-btn ${filterKm ? "active" : ""}`}
+            onClick={onToggleKm}
+            title=".km/.xmind 表示切替"
+          >
+            .km/.xmind
+          </button>
+        )}
       </div>
       <div className="file-tree">
         {entries.length === 0 ? (

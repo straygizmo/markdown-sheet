@@ -319,6 +319,39 @@ function App() {
     () => localStorage.getItem("md-filter-km") === "true"
   );
 
+  // --- Filter button visibility ---
+  const [showDocxBtn, setShowDocxBtn] = useState(
+    () => localStorage.getItem("md-show-docx-btn") !== "false"
+  );
+  const [showXlsBtn, setShowXlsBtn] = useState(
+    () => localStorage.getItem("md-show-xls-btn") !== "false"
+  );
+  const [showKmBtn, setShowKmBtn] = useState(
+    () => localStorage.getItem("md-show-km-btn") === "true"
+  );
+
+  const handleSaveFilterVisibility = useCallback((v: { showDocx: boolean; showXls: boolean; showKm: boolean }) => {
+    setShowDocxBtn(v.showDocx);
+    setShowXlsBtn(v.showXls);
+    setShowKmBtn(v.showKm);
+    localStorage.setItem("md-show-docx-btn", String(v.showDocx));
+    localStorage.setItem("md-show-xls-btn", String(v.showXls));
+    localStorage.setItem("md-show-km-btn", String(v.showKm));
+    // ボタン非表示時はフィルターもオフに
+    if (!v.showDocx && filterDocx) {
+      setFilterDocx(false);
+      localStorage.setItem("md-filter-docx", "false");
+    }
+    if (!v.showXls && filterXls) {
+      setFilterXls(false);
+      localStorage.setItem("md-filter-xls", "false");
+    }
+    if (!v.showKm && filterKm) {
+      setFilterKm(false);
+      localStorage.setItem("md-filter-km", "false");
+    }
+  }, [filterDocx, filterXls, filterKm]);
+
   const toggleFilterDocx = useCallback(() => {
     setFilterDocx((v) => { localStorage.setItem("md-filter-docx", String(!v)); return !v; });
   }, []);
@@ -2056,6 +2089,9 @@ function App() {
               onToggleDocx={toggleFilterDocx}
               onToggleXls={toggleFilterXls}
               onToggleKm={toggleFilterKm}
+              showDocxBtn={showDocxBtn}
+              showXlsBtn={showXlsBtn}
+              showKmBtn={showKmBtn}
             />
           ) : (
             <OutlinePanel content={content} onHeadingClick={handleOutlineClick} />
@@ -2311,6 +2347,8 @@ function App() {
           settings={aiSettings}
           onSave={handleSaveAiSettings}
           onClose={() => setShowSettings(false)}
+          filterVisibility={{ showDocx: showDocxBtn, showXls: showXlsBtn, showKm: showKmBtn }}
+          onSaveFilterVisibility={handleSaveFilterVisibility}
         />
       )}
 

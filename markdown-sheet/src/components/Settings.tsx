@@ -19,14 +19,23 @@ const PROVIDERS: {
   { id: "custom",    label: "カスタム (さくらのAI など)", format: "openai",    baseUrl: "",                                                         model: ""                         },
 ];
 
+interface FilterVisibility {
+  showDocx: boolean;
+  showXls: boolean;
+  showKm: boolean;
+}
+
 interface Props {
   settings: AiSettings;
   onSave: (settings: AiSettings) => void;
   onClose: () => void;
+  filterVisibility: FilterVisibility;
+  onSaveFilterVisibility: (v: FilterVisibility) => void;
 }
 
-const Settings: FC<Props> = ({ settings, onSave, onClose }) => {
+const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSaveFilterVisibility }) => {
   const [local, setLocal] = useState<AiSettings>({ ...settings });
+  const [localFilter, setLocalFilter] = useState<FilterVisibility>({ ...filterVisibility });
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -121,6 +130,7 @@ const Settings: FC<Props> = ({ settings, onSave, onClose }) => {
 
   const handleSave = () => {
     onSave(local);
+    onSaveFilterVisibility(localFilter);
     onClose();
   };
 
@@ -199,6 +209,38 @@ const Settings: FC<Props> = ({ settings, onSave, onClose }) => {
               </span>
             )}
           </div>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section-title">Office 系ファイル</div>
+          <label className="settings-toggle-row">
+            <span>.docx ボタンを表示</span>
+            <input
+              type="checkbox"
+              checked={localFilter.showDocx}
+              onChange={(e) => setLocalFilter((s) => ({ ...s, showDocx: e.target.checked }))}
+            />
+          </label>
+          <label className="settings-toggle-row" style={{ marginTop: 6 }}>
+            <span>.xls* ボタンを表示</span>
+            <input
+              type="checkbox"
+              checked={localFilter.showXls}
+              onChange={(e) => setLocalFilter((s) => ({ ...s, showXls: e.target.checked }))}
+            />
+          </label>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section-title">マインドマップ</div>
+          <label className="settings-toggle-row">
+            <span>.km / .xmind ボタンを表示</span>
+            <input
+              type="checkbox"
+              checked={localFilter.showKm}
+              onChange={(e) => setLocalFilter((s) => ({ ...s, showKm: e.target.checked }))}
+            />
+          </label>
         </div>
 
         <div className="settings-footer">
