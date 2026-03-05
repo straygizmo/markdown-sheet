@@ -277,8 +277,16 @@ function showNoteEditor(
     markDirty();
   });
 
-  // Update textarea when selection changes
+  // Track which node we opened the editor for
+  const openedForNode = minder.getSelectedNode();
+
+  // When selection changes: close panel if a different node is selected
   const handleSelectionChange = () => {
+    const current = minder.getSelectedNode();
+    if (current !== openedForNode) {
+      close();
+      return;
+    }
     const val = minder.queryCommandValue("Note") as string || "";
     textarea.value = val;
   };
@@ -724,6 +732,82 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     };
     minder.on("dblclick", handleDblClick);
 
+    // ── Note icon hover → show balloon tooltip ──
+    let noteTooltip: HTMLDivElement | null = null;
+    let noteShowTimer: ReturnType<typeof setTimeout> | null = null;
+    let noteHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const hideNoteTooltip = () => {
+      if (noteTooltip) {
+        noteTooltip.remove();
+        noteTooltip = null;
+      }
+    };
+
+    const handleShowNote = (...args: unknown[]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = args[0] as any;
+      const node = e?.node as MinderNodeInstance | undefined;
+      if (!node) return;
+
+      if (noteHideTimer) { clearTimeout(noteHideTimer); noteHideTimer = null; }
+
+      noteShowTimer = setTimeout(() => {
+        const note = node.getData("note") as string;
+        if (!note) return;
+
+        hideNoteTooltip();
+
+        const tip = document.createElement("div");
+        tip.className = "km-note-tooltip";
+        // Simple text with newlines preserved (plain text, not rendered Markdown)
+        tip.textContent = note;
+
+        // Position near the note icon
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const icon = (node as any).getRenderer?.("NoteIconRenderer")?.getRenderShape?.();
+        const containerEl2 = containerRef.current;
+        if (icon && containerEl2) {
+          const b = icon.getRenderBox("screen");
+          const cr = containerEl2.getBoundingClientRect();
+          tip.style.left = `${Math.round(b.cx - cr.left)}px`;
+          tip.style.top = `${Math.round(b.bottom - cr.top + 8)}px`;
+        }
+
+        // Keep tooltip visible while hovering over it
+        tip.addEventListener("mouseenter", () => {
+          if (noteHideTimer) { clearTimeout(noteHideTimer); noteHideTimer = null; }
+        });
+        tip.addEventListener("mouseleave", () => {
+          hideNoteTooltip();
+        });
+
+        containerRef.current?.appendChild(tip);
+        noteTooltip = tip;
+      }, 300);
+    };
+
+    const handleHideNote = () => {
+      if (noteShowTimer) { clearTimeout(noteShowTimer); noteShowTimer = null; }
+      noteHideTimer = setTimeout(() => {
+        hideNoteTooltip();
+      }, 300);
+    };
+
+    // Single-click note icon → open note editor
+    const handleEditNote = () => {
+      hideNoteTooltip();
+      if (readOnly) return;
+      const container2 = containerRef.current;
+      if (container2) {
+        showNoteEditor(container2, minder, pushSnapshot, markDirty);
+      }
+    };
+
+    minder.on("shownoterequest", handleShowNote);
+    minder.on("hidenoterequest", handleHideNote);
+    minder.on("editnoterequest", handleEditNote);
+
     // Handle hyperlink icon clicks → open URL in browser
     const handleHyperlinkClick = (...args: unknown[]) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -801,6 +885,10 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     return () => {
       minder.off("dblclick", handleDblClick);
       minder.off("hyperlinkclick", handleHyperlinkClick);
+      minder.off("shownoterequest", handleShowNote);
+      minder.off("hidenoterequest", handleHideNote);
+      minder.off("editnoterequest", handleEditNote);
+      hideNoteTooltip();
       containerEl.removeEventListener("dblclick", handleDomDblClick);
       containerEl.removeEventListener("contextmenu", handleContextMenuNative, true);
       document.removeEventListener("mousedown", handleGlobalMouseDown, true);
