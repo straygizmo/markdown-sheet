@@ -28,6 +28,7 @@
   --cell-del: #9ca3af;
   --inline-code-bg: rgba(168, 85, 247, 0.1);
   --inline-code-text: #7c3aed;
+  --toolbar-text: #4c1d95;
 }
 
 [data-theme="dark"] {
@@ -58,6 +59,7 @@
   --cell-del: #a6adc8;
   --inline-code-bg: #313244;
   --inline-code-text: #a6e3a1;
+  --toolbar-text: var(--text);
 }
 
 /* ========== Reset & Global ========== */

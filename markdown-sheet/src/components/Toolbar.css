@@ -14,7 +14,7 @@
   -webkit-app-region: no-drag;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--toolbar-text, var(--text));
   padding: 4px 10px;
   border-radius: 4px;
   cursor: pointer;
