@@ -41,7 +41,11 @@ export interface MinderInstance {
   getThemeList(): Record<string, unknown>;
   disable(): void;
   enable(): void;
+  focus(): void;
+  blur(): void;
+  isFocused(): boolean;
   refresh(): void;
+  layout(duration?: number): void;
   getRenderContainer(): { getBoundaryBox(): { width: number; height: number } };
 }
 

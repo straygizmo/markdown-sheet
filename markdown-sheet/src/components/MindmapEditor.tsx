@@ -1,5 +1,5 @@
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
-import type { KityMinderJson, MinderInstance } from "../lib/mindmapTypes";
+import type { KityMinderJson, MinderInstance, MinderNodeInstance } from "../lib/mindmapTypes";
 import { parseXmindFile } from "../lib/xmindParser";
 import MindmapToolbar from "./MindmapToolbar";
 import "./MindmapEditor.css";
@@ -30,6 +30,17 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
   const [canRedo, setCanRedo] = useState(false);
   const isUndoingRef = useRef(false);
   const initializedRef = useRef(false);
+
+  // Inline text editing state
+  const editingRef = useRef(false);
+  const editInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const editNodeRef = useRef<MinderNodeInstance | null>(null);
+  const startEditNodeRef = useRef<(node: MinderNodeInstance) => void>(() => {});
+
+  const markDirty = useCallback(() => {
+    setDirty(true);
+    onDirtyChange(true);
+  }, [onDirtyChange]);
 
   const pushSnapshot = useCallback(() => {
     if (isUndoingRef.current || !minderRef.current) return;
@@ -67,6 +78,108 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     setCanRedo(redoStackRef.current.length > 0);
     isUndoingRef.current = false;
   }, []);
+
+  /** Start inline editing for the given node */
+  const startEditNode = useCallback((node: MinderNodeInstance) => {
+    const minder = minderRef.current;
+    const container = containerRef.current;
+    if (!minder || !container || editingRef.current) return;
+
+    // Get the node's bounding box via the underlying SVG DOM element
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nodeAny = node as any;
+    const nodeRC = nodeAny.getRenderContainer?.() || nodeAny.rc;
+    if (!nodeRC) return;
+
+    const svgEl: SVGElement | undefined = nodeRC.node;
+    if (!svgEl) return;
+
+    const paperBox = svgEl.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const x = paperBox.x - containerRect.left;
+    const y = paperBox.y - containerRect.top;
+    const w = Math.max(paperBox.width, 60);
+    const h = Math.max(paperBox.height, 24);
+
+    editingRef.current = true;
+    editNodeRef.current = node;
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "km-edit-textarea";
+    textarea.value = node.getText() || "";
+    textarea.style.position = "absolute";
+    textarea.style.left = `${x - 4}px`;
+    textarea.style.top = `${y - 2}px`;
+    textarea.style.minWidth = `${w + 8}px`;
+    textarea.style.minHeight = `${h + 4}px`;
+    textarea.style.zIndex = "200";
+
+    const cleanup = () => {
+      editingRef.current = false;
+      editNodeRef.current = null;
+      textarea.remove();
+      editInputRef.current = null;
+      document.removeEventListener("mousedown", handleClickOutside, true);
+      // Re-focus the minder's key receiver so keyboard navigation resumes
+      minder.focus();
+    };
+
+    const commitEdit = () => {
+      if (!editingRef.current) return;
+      const newText = textarea.value.trim();
+      const oldText = node.getText() || "";
+      cleanup();
+
+      if (newText && newText !== oldText) {
+        pushSnapshot();
+        // Re-select the node before executing the text command
+        minder.select([node], true);
+        minder.execCommand("text", newText);
+        markDirty();
+      }
+    };
+
+    const cancelEdit = () => {
+      cleanup();
+    };
+
+    // Click outside the textarea to commit
+    const handleClickOutside = (e: MouseEvent) => {
+      if (editingRef.current && !textarea.contains(e.target as Node)) {
+        commitEdit();
+      }
+    };
+
+    textarea.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        commitEdit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelEdit();
+      }
+    });
+
+    // Prevent minder from stealing focus via mouse events on the textarea
+    textarea.addEventListener("mousedown", (e) => e.stopPropagation());
+    textarea.addEventListener("pointerdown", (e) => e.stopPropagation());
+
+    // Use click-outside instead of blur to commit (avoids focus-stealing race)
+    document.addEventListener("mousedown", handleClickOutside, true);
+
+    editInputRef.current = textarea;
+    container.appendChild(textarea);
+
+    // Focus after a frame to avoid kityminder's event processing stealing focus
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.select();
+    });
+  }, [pushSnapshot, markDirty]);
+
+  // Keep the ref in sync so event handlers always use the latest function
+  startEditNodeRef.current = startEditNode;
 
   // Initialize minder
   useEffect(() => {
@@ -121,7 +234,31 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
 
     loadData();
 
+    // Register dblclick handler on the minder instance (not DOM) so it fires
+    // reliably even when kityminder processes the event internally
+    const handleDblClick = () => {
+      if (editingRef.current) return;
+      const selected = minder.getSelectedNode();
+      if (selected) {
+        startEditNodeRef.current(selected);
+      }
+    };
+    minder.on("dblclick", handleDblClick);
+
+    // Also listen for DOM dblclick on the container as a fallback
+    const containerEl = containerRef.current;
+    const handleDomDblClick = () => {
+      if (editingRef.current) return;
+      const selected = minder.getSelectedNode();
+      if (selected) {
+        startEditNodeRef.current(selected);
+      }
+    };
+    containerEl.addEventListener("dblclick", handleDomDblClick);
+
     return () => {
+      minder.off("dblclick", handleDblClick);
+      containerEl.removeEventListener("dblclick", handleDomDblClick);
       // Cleanup: remove SVG from DOM
       if (containerRef.current) {
         containerRef.current.innerHTML = "";
@@ -132,17 +269,29 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileData, fileType, filePath]);
 
-  // Listen for content changes
+  // Listen for content changes and set default text on newly added empty nodes
   useEffect(() => {
     const minder = minderRef.current;
     if (!minder) return;
 
     const handleChange = () => {
       if (!initializedRef.current) return;
+      // Check if the selected node has empty text (just added by Enter/Tab)
+      const selected = minder.getSelectedNode();
+      if (selected && !selected.isRoot() && !selected.getText()) {
+        const parent = selected.getParent();
+        if (parent) {
+          const siblingCount = parent.getChildren().length;
+          selected.setText(`サブトピック ${siblingCount}`);
+          // Re-render the node to reflect the text change
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (selected as any).render?.();
+          minder.layout(0);
+        }
+      }
       pushSnapshot();
       if (!dirty) {
-        setDirty(true);
-        onDirtyChange(true);
+        markDirty();
       }
     };
 
@@ -150,7 +299,7 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     return () => {
       minder.off("contentchange", handleChange);
     };
-  }, [dirty, pushSnapshot, onDirtyChange]);
+  }, [dirty, pushSnapshot, markDirty]);
 
   // Dark mode background
   useEffect(() => {
@@ -158,37 +307,6 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
       containerRef.current.style.background = theme === "dark" ? "#1e1e2e" : "#ffffff";
     }
   }, [theme]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const minder = minderRef.current;
-      if (!minder) return;
-
-      // Check if focus is within our container
-      const container = containerRef.current;
-      if (!container) return;
-
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === "s") {
-          e.preventDefault();
-          handleSave();
-        } else if (e.key === "z") {
-          e.preventDefault();
-          handleUndo();
-        } else if (e.key === "y") {
-          e.preventDefault();
-          handleRedo();
-        }
-      }
-
-      // Let kityminder handle Tab, Enter, Delete, F2 natively
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleUndo, handleRedo]);
 
   const handleSave = useCallback(() => {
     const minder = minderRef.current;
@@ -209,10 +327,9 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     minder.execCommand("Theme", themeId);
     setCurrentTheme(themeId);
     if (!dirty) {
-      setDirty(true);
-      onDirtyChange(true);
+      markDirty();
     }
-  }, [pushSnapshot, dirty, onDirtyChange]);
+  }, [pushSnapshot, dirty, markDirty]);
 
   const handleChangeLayout = useCallback((layoutId: string) => {
     const minder = minderRef.current;
@@ -221,10 +338,9 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     minder.execCommand("Template", layoutId);
     setCurrentLayout(layoutId);
     if (!dirty) {
-      setDirty(true);
-      onDirtyChange(true);
+      markDirty();
     }
-  }, [pushSnapshot, dirty, onDirtyChange]);
+  }, [pushSnapshot, dirty, markDirty]);
 
   const handleAddChild = useCallback(() => {
     const minder = minderRef.current;
@@ -239,6 +355,47 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     pushSnapshot();
     minder.execCommand("AppendSiblingNode");
   }, [pushSnapshot]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if currently editing a node
+      if (editingRef.current) return;
+
+      const minder = minderRef.current;
+      if (!minder) return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "s") {
+          e.preventDefault();
+          handleSave();
+        } else if (e.key === "z") {
+          e.preventDefault();
+          handleUndo();
+        } else if (e.key === "y") {
+          e.preventDefault();
+          handleRedo();
+        }
+      }
+
+      // F2 to edit selected node text
+      if (e.key === "F2") {
+        e.preventDefault();
+        const selected = minder.getSelectedNode();
+        if (selected) {
+          startEditNodeRef.current(selected);
+        }
+      }
+
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleUndo, handleRedo, startEditNode, handleSave]);
 
   const handleDeleteNode = useCallback(() => {
     const minder = minderRef.current;
