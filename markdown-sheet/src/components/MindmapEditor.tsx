@@ -681,6 +681,8 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     });
     minderRef.current = minder;
     minder.renderTo(containerRef.current);
+    // Clear inline background set by kityminder; CSS var(--bg-base) handles it
+    containerRef.current.style.background = "";
 
     // Load data
     const loadData = async () => {
@@ -696,6 +698,11 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
         }
 
         minder.importJson(jsonData);
+
+        // Clear inline background set by kityminder's setTheme; CSS var(--bg-base) handles it
+        if (containerRef.current) {
+          containerRef.current.style.background = "";
+        }
 
         // Apply theme and layout from file
         if (jsonData.theme) {
@@ -939,10 +946,10 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     };
   }, [dirty, pushSnapshot, markDirty]);
 
-  // Dark mode background
+  // Clear any inline background set by kityminder's setTheme so CSS var(--bg-base) applies
   useEffect(() => {
     if (containerRef.current) {
-      containerRef.current.style.background = theme === "dark" ? "#1e1e2e" : "#ffffff";
+      containerRef.current.style.background = "";
     }
   }, [theme]);
 
@@ -963,6 +970,10 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     if (!minder) return;
     pushSnapshot();
     minder.execCommand("Theme", themeId);
+    // Clear inline background set by kityminder's setTheme; CSS var(--bg-base) handles it
+    if (containerRef.current) {
+      containerRef.current.style.background = "";
+    }
     setCurrentTheme(themeId);
     if (!dirty) {
       markDirty();
@@ -1063,7 +1074,7 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
         onUndo={handleUndo}
         onRedo={handleRedo}
       />
-      <div className="mindmap-container" ref={containerRef} />
+      <div className="mindmap-container" ref={containerRef} data-theme={theme} />
     </div>
   );
 });

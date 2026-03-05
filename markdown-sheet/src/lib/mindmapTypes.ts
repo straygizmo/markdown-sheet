@@ -40,7 +40,6 @@ export interface MinderInstance {
   select(node: MinderNodeInstance | MinderNodeInstance[], isSilent?: boolean): void;
   useTheme(theme: string): void;
   useTemplate(template: string): void;
-  getThemeList(): Record<string, unknown>;
   disable(): void;
   enable(): void;
   focus(): void;

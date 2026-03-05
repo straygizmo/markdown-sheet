@@ -330,6 +330,11 @@
   outline: none;
 }
 
+/* Dark mode: override black SVG text fill for visibility on dark background */
+.mindmap-container[data-theme="dark"] [fill="black"] {
+  fill: #d0d0d0 !important;
+}
+
 /* Note tooltip balloon (hover on note icon) */
 .km-note-tooltip {
   position: absolute;
