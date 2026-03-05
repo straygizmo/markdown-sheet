@@ -4,7 +4,7 @@ import { readFile, readTextFile, writeTextFile, writeFile } from "@tauri-apps/pl
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import FileTree from "./components/FileTree";
-import MindmapEditor from "./components/MindmapEditor";
+import MindmapEditor, { type MindmapEditorHandle } from "./components/MindmapEditor";
 import PreviewPanel from "./components/PreviewPanel";
 import Settings from "./components/Settings";
 import OutlinePanel from "./components/OutlinePanel";
@@ -301,6 +301,7 @@ function App() {
   // --- Mindmap editor ---
   const [mindmapFileData, setMindmapFileData] = useState<Uint8Array | null>(null);
   const [mindmapFileType, setMindmapFileType] = useState<string | null>(null);
+  const mindmapEditorRef = useRef<MindmapEditorHandle>(null);
 
   // --- File type filters ---
   const migrateOld = localStorage.getItem("md-office-viewer") === "true";
@@ -1029,9 +1030,9 @@ function App() {
   const handleSaveAs = useCallback(async () => {
     let selected: string | null = null;
     try {
-      const isKm = activeFile?.toLowerCase().endsWith(".km");
+      const isMindmap = MINDMAP_EXTENSIONS.some(ext => activeFile?.toLowerCase().endsWith(ext));
       selected = await save({
-        filters: isKm
+        filters: isMindmap
           ? [{ name: "Mindmap", extensions: ["km"] }]
           : [{ name: "Markdown", extensions: ["md"] }],
       });
@@ -1042,14 +1043,28 @@ function App() {
     }
     if (!selected) return;
     try {
-      const text =
-        activeViewTab === "table"
+      const isMindmap = MINDMAP_EXTENSIONS.some(ext => activeFile?.toLowerCase().endsWith(ext));
+      let text: string;
+      if (isMindmap) {
+        const json = mindmapEditorRef.current?.getJson();
+        if (!json) {
+          showToast("マインドマップデータを取得できませんでした", true);
+          return;
+        }
+        text = JSON.stringify(json, null, 2);
+      } else {
+        text = activeViewTab === "table"
           ? rebuildDocument(originalLines, tables)
           : content;
+      }
       lastWriteRef.current = Date.now();
       await writeTextFile(selected, text);
       setActiveFile(selected);
       setDirty(false);
+      if (isMindmap) {
+        setMindmapFileType(".km");
+        setMindmapFileData(new TextEncoder().encode(text));
+      }
       const currentId = activeTabIdRef.current;
       setTabs((prev) =>
         prev.map((t) =>
@@ -2020,6 +2035,7 @@ function App() {
           /* Mindmap mode: マインドマップエディタ */
           <div className="content-area" style={{ display: "flex", flexDirection: "row" }}>
             <MindmapEditor
+              ref={mindmapEditorRef}
               fileData={mindmapFileData}
               fileType={mindmapFileType}
               filePath={activeFile}

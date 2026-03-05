@@ -1,4 +1,4 @@
-import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { KityMinderJson, MinderInstance, MinderNodeInstance } from "../lib/mindmapTypes";
 import { parseXmindFile } from "../lib/xmindParser";
 import MindmapToolbar from "./MindmapToolbar";
@@ -120,7 +120,12 @@ function buildContextMenu(
   return menu;
 }
 
-const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave, onDirtyChange }) => {
+export interface MindmapEditorHandle {
+  getJson: () => KityMinderJson | null;
+}
+
+const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileType, filePath, theme, onSave, onDirtyChange }, ref) => {
+  const readOnly = fileType === ".xmind";
   const containerRef = useRef<HTMLDivElement>(null);
   const minderRef = useRef<MinderInstance | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +149,10 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
 
   // Context menu ref (DOM-based, not React state)
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    getJson: () => minderRef.current?.exportJson() ?? null,
+  }));
 
   const markDirty = useCallback(() => {
     setDirty(true);
@@ -345,7 +354,7 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     // Register dblclick handler on the minder instance (not DOM) so it fires
     // reliably even when kityminder processes the event internally
     const handleDblClick = () => {
-      if (editingRef.current) return;
+      if (readOnly || editingRef.current) return;
       const selected = minder.getSelectedNode();
       if (selected) {
         startEditNodeRef.current(selected);
@@ -356,13 +365,29 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     // Also listen for DOM dblclick on the container as a fallback
     const containerEl = containerRef.current;
     const handleDomDblClick = () => {
-      if (editingRef.current) return;
+      if (readOnly || editingRef.current) return;
       const selected = minder.getSelectedNode();
       if (selected) {
         startEditNodeRef.current(selected);
       }
     };
     containerEl.addEventListener("dblclick", handleDomDblClick);
+
+    // Block KityMinder's built-in editing hotkeys (Tab, Enter, Delete, Backspace) for read-only files
+    const handleReadOnlyBlock = (e: KeyboardEvent) => {
+      if (!readOnly) return;
+      const blockedKeys = ["Tab", "Enter", "Delete", "Backspace", "F2"];
+      if (blockedKeys.includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    if (readOnly) {
+      containerEl.addEventListener("keydown", handleReadOnlyBlock, true);
+      // Also block at window level to catch kityminder's key receiver
+      window.addEventListener("keydown", handleReadOnlyBlock, true);
+    }
 
     // Context menu (pure DOM, no React state to avoid re-render interference)
     const closeMenu = () => {
@@ -381,6 +406,7 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
 
     const handleContextMenuNative = (e: MouseEvent) => {
       e.preventDefault();
+      if (readOnly) return;
       const selected = minder.getSelectedNode();
       if (!selected) return;
 
@@ -402,6 +428,10 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
       containerEl.removeEventListener("dblclick", handleDomDblClick);
       containerEl.removeEventListener("contextmenu", handleContextMenuNative, true);
       document.removeEventListener("mousedown", handleGlobalMouseDown, true);
+      if (readOnly) {
+        containerEl.removeEventListener("keydown", handleReadOnlyBlock, true);
+        window.removeEventListener("keydown", handleReadOnlyBlock, true);
+      }
       closeMenu();
       // Cleanup: remove SVG from DOM
       if (containerRef.current) {
@@ -419,7 +449,7 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     if (!minder) return;
 
     const handleChange = () => {
-      if (!initializedRef.current) return;
+      if (!initializedRef.current || readOnly) return;
       // Check if the selected node has empty text (just added by Enter/Tab)
       const selected = minder.getSelectedNode();
       if (selected && !selected.isRoot() && !selected.getText()) {
@@ -525,8 +555,8 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
         }
       }
 
-      // F2 to edit selected node text
-      if (e.key === "F2") {
+      // F2 to edit selected node text (not in read-only mode)
+      if (e.key === "F2" && !readOnly) {
         e.preventDefault();
         const selected = minder.getSelectedNode();
         if (selected) {
@@ -563,6 +593,7 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
         currentLayout={currentLayout}
         canUndo={canUndo}
         canRedo={canRedo}
+        readOnly={readOnly}
         onChangeTheme={handleChangeTheme}
         onChangeLayout={handleChangeLayout}
         onUndo={handleUndo}
@@ -571,6 +602,6 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
       <div className="mindmap-container" ref={containerRef} />
     </div>
   );
-};
+});
 
 export default MindmapEditor;
