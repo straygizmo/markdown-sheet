@@ -41,11 +41,6 @@
   justify-content: center;
 }
 
-.mm-tb-btn.mm-tb-save.mm-tb-dirty {
-  border-color: var(--primary);
-  color: var(--primary);
-  font-weight: 600;
-}
 
 .mm-tb-btn.mm-tb-delete:hover:not(:disabled) {
   border-color: var(--accent-red);

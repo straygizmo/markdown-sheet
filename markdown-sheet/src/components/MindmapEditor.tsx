@@ -561,17 +561,12 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
       <MindmapToolbar
         currentTheme={currentTheme}
         currentLayout={currentLayout}
-        dirty={dirty}
         canUndo={canUndo}
         canRedo={canRedo}
         onChangeTheme={handleChangeTheme}
         onChangeLayout={handleChangeLayout}
-        onAddChild={handleAddChild}
-        onAddSibling={handleAddSibling}
-        onDeleteNode={handleDeleteNode}
         onUndo={handleUndo}
         onRedo={handleRedo}
-        onSave={handleSave}
       />
       <div className="mindmap-container" ref={containerRef} />
     </div>

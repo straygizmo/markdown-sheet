@@ -23,46 +23,26 @@ const LAYOUTS = [
 interface Props {
   currentTheme: string;
   currentLayout: string;
-  dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onChangeTheme: (theme: string) => void;
   onChangeLayout: (layout: string) => void;
-  onAddChild: () => void;
-  onAddSibling: () => void;
-  onDeleteNode: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  onSave: () => void;
 }
 
 const MindmapToolbar: FC<Props> = ({
   currentTheme,
   currentLayout,
-  dirty,
   canUndo,
   canRedo,
   onChangeTheme,
   onChangeLayout,
-  onAddChild,
-  onAddSibling,
-  onDeleteNode,
   onUndo,
   onRedo,
-  onSave,
 }) => {
   return (
     <div className="mindmap-toolbar">
-      {/* Save */}
-      <button
-        className={`mm-tb-btn mm-tb-save ${dirty ? "mm-tb-dirty" : ""}`}
-        onClick={onSave}
-        title="保存 (Ctrl+S)"
-      >
-        💾 保存{dirty ? " *" : ""}
-      </button>
-      <span className="mm-tb-sep" />
-
       {/* Undo / Redo */}
       <button className="mm-tb-btn" onClick={onUndo} disabled={!canUndo} title="元に戻す (Ctrl+Z)">
         ↩ 戻す
@@ -72,17 +52,6 @@ const MindmapToolbar: FC<Props> = ({
       </button>
       <span className="mm-tb-sep" />
 
-      {/* Node operations */}
-      <button className="mm-tb-btn" onClick={onAddChild} title="子ノード追加 (Tab)">
-        ＋ 子
-      </button>
-      <button className="mm-tb-btn" onClick={onAddSibling} title="兄弟ノード追加 (Enter)">
-        ＋ 兄弟
-      </button>
-      <button className="mm-tb-btn mm-tb-delete" onClick={onDeleteNode} title="ノード削除 (Delete)">
-        ✕ 削除
-      </button>
-      <span className="mm-tb-sep" />
 
       {/* Theme */}
       <span className="mm-tb-label">テーマ:</span>
