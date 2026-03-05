@@ -25,6 +25,7 @@ interface Props {
   currentLayout: string;
   canUndo: boolean;
   canRedo: boolean;
+  readOnly?: boolean;
   onChangeTheme: (theme: string) => void;
   onChangeLayout: (layout: string) => void;
   onUndo: () => void;
@@ -36,6 +37,7 @@ const MindmapToolbar: FC<Props> = ({
   currentLayout,
   canUndo,
   canRedo,
+  readOnly,
   onChangeTheme,
   onChangeLayout,
   onUndo,
@@ -43,14 +45,21 @@ const MindmapToolbar: FC<Props> = ({
 }) => {
   return (
     <div className="mindmap-toolbar">
+      {readOnly && (
+        <span className="mm-tb-readonly" title="XMindファイルは読み取り専用です">読み取り専用</span>
+      )}
       {/* Undo / Redo */}
-      <button className="mm-tb-btn" onClick={onUndo} disabled={!canUndo} title="元に戻す (Ctrl+Z)">
-        ↩ 戻す
-      </button>
-      <button className="mm-tb-btn" onClick={onRedo} disabled={!canRedo} title="やり直し (Ctrl+Y)">
-        ↪ やり直し
-      </button>
-      <span className="mm-tb-sep" />
+      {!readOnly && (
+        <>
+          <button className="mm-tb-btn" onClick={onUndo} disabled={!canUndo} title="元に戻す (Ctrl+Z)">
+            ↩ 戻す
+          </button>
+          <button className="mm-tb-btn" onClick={onRedo} disabled={!canRedo} title="やり直し (Ctrl+Y)">
+            ↪ やり直し
+          </button>
+          <span className="mm-tb-sep" />
+        </>
+      )}
 
 
       {/* Theme */}

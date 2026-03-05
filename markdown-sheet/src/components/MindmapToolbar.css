@@ -75,3 +75,14 @@
 .mm-tb-select:hover {
   border-color: var(--border-hover);
 }
+
+.mm-tb-readonly {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
