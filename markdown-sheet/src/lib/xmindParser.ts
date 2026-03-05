@@ -107,11 +107,24 @@ function convertNode(
     }
   }
 
+  // Resolve hyperlink
+  const href = (data.href as string) ||
+    (data._attributes as Record<string, string> | undefined)?.["xlink:href"] ||
+    (data._attributes as Record<string, string> | undefined)?.href ||
+    "";
+  const hyperlinkTitle = (data["xlink:title"] as string) ||
+    (data._attributes as Record<string, string> | undefined)?.["xlink:title"] ||
+    "";
+
   const nodeData: KityMinderNodeData = { text };
   if (priority !== undefined) nodeData.priority = priority;
   if (progress !== undefined) nodeData.progress = progress;
   const noteContent = notes?.plain?.content || (notes?.plain as Record<string, string>)?._text;
   if (noteContent) nodeData.note = noteContent;
+  if (href) {
+    nodeData.hyperlink = href;
+    if (hyperlinkTitle) nodeData.hyperlinkTitle = hyperlinkTitle;
+  }
   if (imageBase) {
     nodeData.image = imageBase;
     nodeData.imageSize = imageSize;

@@ -4,6 +4,8 @@ export interface KityMinderNodeData {
   text: string;
   priority?: number;
   progress?: number;
+  hyperlink?: string;
+  hyperlinkTitle?: string;
   note?: string;
   image?: string;
   imageSize?: { width: number; height: number };

@@ -15,11 +15,300 @@ interface Props {
 
 const MAX_UNDO = 100;
 
+const URL_REGEX = /^(https?|ftp):\/\/.+/i;
+
+/** Show hyperlink dialog (pure DOM modal) */
+function showHyperlinkDialog(
+  minder: MinderInstance,
+  pushSnapshot: () => void,
+  markDirty: () => void,
+): void {
+  const existing = minder.queryCommandValue("HyperLink") as { url?: string; title?: string } | null;
+
+  const overlay = document.createElement("div");
+  overlay.className = "km-modal-overlay";
+
+  const dialog = document.createElement("div");
+  dialog.className = "km-modal-dialog";
+
+  const header = document.createElement("div");
+  header.className = "km-modal-header";
+  header.innerHTML = `<span>リンク</span><button class="km-modal-close">&times;</button>`;
+
+  const body = document.createElement("div");
+  body.className = "km-modal-body";
+  body.innerHTML = `
+    <label>URL</label>
+    <input type="text" id="km-link-url" placeholder="https://example.com" />
+    <div class="km-error-text" id="km-link-error" style="display:none">有効なURL (http/https/ftp) を入力してください</div>
+    <label>タイトル (任意)</label>
+    <input type="text" id="km-link-title" placeholder="リンクのタイトル" />
+  `;
+
+  const footer = document.createElement("div");
+  footer.className = "km-modal-footer";
+  footer.innerHTML = `
+    <button class="km-btn-cancel">キャンセル</button>
+    <button class="km-btn-primary" id="km-link-ok">OK</button>
+  `;
+
+  dialog.appendChild(header);
+  dialog.appendChild(body);
+  dialog.appendChild(footer);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  const urlInput = body.querySelector("#km-link-url") as HTMLInputElement;
+  const titleInput = body.querySelector("#km-link-title") as HTMLInputElement;
+  const errorDiv = body.querySelector("#km-link-error") as HTMLDivElement;
+
+  if (existing?.url) {
+    urlInput.value = existing.url;
+    titleInput.value = existing.title || "";
+  }
+
+  const close = () => overlay.remove();
+
+  const ok = () => {
+    const url = urlInput.value.trim();
+    if (!URL_REGEX.test(url)) {
+      errorDiv.style.display = "";
+      urlInput.focus();
+      return;
+    }
+    close();
+    pushSnapshot();
+    minder.execCommand("HyperLink", url, titleInput.value.trim());
+    markDirty();
+  };
+
+  header.querySelector(".km-modal-close")!.addEventListener("click", close);
+  footer.querySelector(".km-btn-cancel")!.addEventListener("click", close);
+  footer.querySelector("#km-link-ok")!.addEventListener("click", ok);
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) close();
+  });
+
+  urlInput.addEventListener("input", () => {
+    errorDiv.style.display = "none";
+  });
+  urlInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") ok();
+    if (e.key === "Escape") close();
+  });
+  titleInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") ok();
+    if (e.key === "Escape") close();
+  });
+
+  requestAnimationFrame(() => {
+    urlInput.focus();
+    urlInput.select();
+  });
+}
+
+/** Show image dialog (pure DOM modal with URL / file tabs) */
+function showImageDialog(
+  minder: MinderInstance,
+  pushSnapshot: () => void,
+  markDirty: () => void,
+): void {
+  const existing = minder.queryCommandValue("Image") as { url?: string; title?: string } | null;
+
+  const overlay = document.createElement("div");
+  overlay.className = "km-modal-overlay";
+
+  const dialog = document.createElement("div");
+  dialog.className = "km-modal-dialog";
+
+  const header = document.createElement("div");
+  header.className = "km-modal-header";
+  header.innerHTML = `<span>画像</span><button class="km-modal-close">&times;</button>`;
+
+  const body = document.createElement("div");
+  body.className = "km-modal-body";
+  body.innerHTML = `
+    <div class="km-tab-bar">
+      <button class="km-tab-active" data-tab="url">URL指定</button>
+      <button data-tab="file">ファイル選択</button>
+    </div>
+    <div id="km-img-tab-url">
+      <label>画像URL</label>
+      <input type="text" id="km-img-url" placeholder="https://example.com/image.png" />
+      <label>タイトル (任意)</label>
+      <input type="text" id="km-img-title" placeholder="画像のタイトル" />
+    </div>
+    <div id="km-img-tab-file" style="display:none">
+      <div class="km-file-input-wrapper">
+        <input type="file" id="km-img-file" accept="image/*" />
+      </div>
+    </div>
+    <img class="km-image-preview" id="km-img-preview" style="display:none" />
+  `;
+
+  const footer = document.createElement("div");
+  footer.className = "km-modal-footer";
+  footer.innerHTML = `
+    <button class="km-btn-cancel">キャンセル</button>
+    <button class="km-btn-primary" id="km-img-ok">OK</button>
+  `;
+
+  dialog.appendChild(header);
+  dialog.appendChild(body);
+  dialog.appendChild(footer);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  const urlInput = body.querySelector("#km-img-url") as HTMLInputElement;
+  const titleInput = body.querySelector("#km-img-title") as HTMLInputElement;
+  const fileInput = body.querySelector("#km-img-file") as HTMLInputElement;
+  const preview = body.querySelector("#km-img-preview") as HTMLImageElement;
+  const tabUrl = body.querySelector("#km-img-tab-url") as HTMLDivElement;
+  const tabFile = body.querySelector("#km-img-tab-file") as HTMLDivElement;
+  const tabButtons = body.querySelectorAll(".km-tab-bar button");
+
+  let currentUrl = existing?.url || "";
+  let currentTitle = existing?.title || "";
+
+  if (currentUrl) {
+    urlInput.value = currentUrl;
+    titleInput.value = currentTitle;
+    preview.src = currentUrl;
+    preview.style.display = "";
+  }
+
+  // Tab switching
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabButtons.forEach((b) => b.classList.remove("km-tab-active"));
+      btn.classList.add("km-tab-active");
+      const tab = btn.getAttribute("data-tab");
+      tabUrl.style.display = tab === "url" ? "" : "none";
+      tabFile.style.display = tab === "file" ? "" : "none";
+    });
+  });
+
+  // URL input preview
+  urlInput.addEventListener("blur", () => {
+    const url = urlInput.value.trim();
+    if (url) {
+      currentUrl = url;
+      preview.src = url;
+      preview.style.display = "";
+    }
+  });
+
+  // File input
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      currentUrl = reader.result as string;
+      currentTitle = titleInput.value.trim() || file.name;
+      preview.src = currentUrl;
+      preview.style.display = "";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const close = () => overlay.remove();
+
+  const ok = () => {
+    const url = currentUrl || urlInput.value.trim();
+    if (!url) return;
+    close();
+    pushSnapshot();
+    minder.execCommand("Image", url, titleInput.value.trim() || currentTitle);
+    markDirty();
+  };
+
+  header.querySelector(".km-modal-close")!.addEventListener("click", close);
+  footer.querySelector(".km-btn-cancel")!.addEventListener("click", close);
+  footer.querySelector("#km-img-ok")!.addEventListener("click", ok);
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) close();
+  });
+  overlay.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+
+  requestAnimationFrame(() => urlInput.focus());
+}
+
+/** Show note editor panel (appended to mindmap container, pure DOM) */
+function showNoteEditor(
+  container: HTMLElement,
+  minder: MinderInstance,
+  pushSnapshot: () => void,
+  markDirty: () => void,
+): void {
+  // If already open, just focus it
+  const existing = container.querySelector(".km-note-panel");
+  if (existing) {
+    (existing.querySelector("textarea") as HTMLTextAreaElement)?.focus();
+    return;
+  }
+
+  const panel = document.createElement("div");
+  panel.className = "km-note-panel";
+
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "km-note-panel-header";
+  headerDiv.innerHTML = `<span>ノート (Markdown)</span><button title="閉じる">&times;</button>`;
+
+  const textarea = document.createElement("textarea");
+  textarea.placeholder = "マークダウンテキストを入力...";
+
+  const noteContent = minder.queryCommandValue("Note") as string || "";
+  textarea.value = noteContent;
+
+  panel.appendChild(headerDiv);
+  panel.appendChild(textarea);
+  container.appendChild(panel);
+
+  const close = () => panel.remove();
+
+  headerDiv.querySelector("button")!.addEventListener("click", close);
+
+  textarea.addEventListener("input", () => {
+    pushSnapshot();
+    minder.execCommand("Note", textarea.value);
+    markDirty();
+  });
+
+  // Update textarea when selection changes
+  const handleSelectionChange = () => {
+    const val = minder.queryCommandValue("Note") as string || "";
+    textarea.value = val;
+  };
+  minder.on("selectionchange", handleSelectionChange);
+
+  // Prevent keyboard events from reaching minder
+  textarea.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") close();
+  });
+  textarea.addEventListener("mousedown", (e) => e.stopPropagation());
+
+  // Cleanup minder listener when panel is removed
+  const observer = new MutationObserver(() => {
+    if (!container.contains(panel)) {
+      minder.off("selectionchange", handleSelectionChange);
+      observer.disconnect();
+    }
+  });
+  observer.observe(container, { childList: true });
+
+  requestAnimationFrame(() => textarea.focus());
+}
+
 /** Build the context menu DOM tree (pure DOM, no React state) */
 function buildContextMenu(
   minder: MinderInstance,
   pushSnapshot: () => void,
   closeMenu: () => void,
+  markDirty: () => void,
 ): HTMLDivElement {
   const menu = document.createElement("div");
   menu.className = "km-context-menu";
@@ -113,6 +402,79 @@ function buildContextMenu(
 
   menu.appendChild(insertItem);
   menu.appendChild(markerItem);
+
+  // Separator
+  const sep = document.createElement("div");
+  sep.className = "km-context-menu-separator";
+  menu.appendChild(sep);
+
+  // リンク
+  const selectedNode = minder.getSelectedNode();
+  const hasLink = selectedNode && selectedNode.getData("hyperlink");
+  const linkItem = makeSubmenuItem("リンク", () => {
+    const sub = document.createElement("div");
+    sub.className = "km-context-submenu";
+    sub.appendChild(makeItem("リンクを編集...", () => {
+      closeMenu();
+      showHyperlinkDialog(minder, pushSnapshot, markDirty);
+    }));
+    if (hasLink) {
+      sub.appendChild(makeItem("リンクを削除", () => {
+        closeMenu();
+        pushSnapshot();
+        minder.execCommand("HyperLink", null);
+        markDirty();
+      }));
+    }
+    return sub;
+  });
+  menu.appendChild(linkItem);
+
+  // 画像
+  const hasImage = selectedNode && selectedNode.getData("image");
+  const imageItem = makeSubmenuItem("画像", () => {
+    const sub = document.createElement("div");
+    sub.className = "km-context-submenu";
+    sub.appendChild(makeItem("画像を編集...", () => {
+      closeMenu();
+      showImageDialog(minder, pushSnapshot, markDirty);
+    }));
+    if (hasImage) {
+      sub.appendChild(makeItem("画像を削除", () => {
+        closeMenu();
+        pushSnapshot();
+        minder.execCommand("Image", null);
+        markDirty();
+      }));
+    }
+    return sub;
+  });
+  menu.appendChild(imageItem);
+
+  // ノート
+  const hasNote = selectedNode && selectedNode.getData("note");
+  const noteItem = makeSubmenuItem("ノート", () => {
+    const sub = document.createElement("div");
+    sub.className = "km-context-submenu";
+    sub.appendChild(makeItem("ノートを編集...", () => {
+      closeMenu();
+      // Note editor needs the container - we'll find it via DOM
+      const container = document.querySelector(".mindmap-container") as HTMLElement;
+      if (container) {
+        showNoteEditor(container, minder, pushSnapshot, markDirty);
+      }
+    }));
+    if (hasNote) {
+      sub.appendChild(makeItem("ノートを削除", () => {
+        closeMenu();
+        pushSnapshot();
+        minder.execCommand("Note", null);
+        markDirty();
+      }));
+    }
+    return sub;
+  });
+  menu.appendChild(noteItem);
 
   // Prevent clicks inside menu from closing it via the global listener
   menu.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -362,6 +724,19 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     };
     minder.on("dblclick", handleDblClick);
 
+    // Handle hyperlink icon clicks → open URL in browser
+    const handleHyperlinkClick = (...args: unknown[]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = args[0] as any;
+      const node = (e?.node as MinderNodeInstance) || minder.getSelectedNode();
+      if (!node) return;
+      const url = node.getData("hyperlink") as string;
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    };
+    minder.on("hyperlinkclick", handleHyperlinkClick);
+
     // Also listen for DOM dblclick on the container as a fallback
     const containerEl = containerRef.current;
     const handleDomDblClick = () => {
@@ -413,7 +788,7 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
       // Remove previous menu if any
       closeMenu();
 
-      const menu = buildContextMenu(minder, pushSnapshot, closeMenu);
+      const menu = buildContextMenu(minder, pushSnapshot, closeMenu, markDirty);
       menu.style.left = `${e.clientX}px`;
       menu.style.top = `${e.clientY}px`;
       document.body.appendChild(menu);
@@ -425,6 +800,7 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
 
     return () => {
       minder.off("dblclick", handleDblClick);
+      minder.off("hyperlinkclick", handleHyperlinkClick);
       containerEl.removeEventListener("dblclick", handleDomDblClick);
       containerEl.removeEventListener("contextmenu", handleContextMenuNative, true);
       document.removeEventListener("mousedown", handleGlobalMouseDown, true);
