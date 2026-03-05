@@ -13,21 +13,25 @@ pub struct FileEntry {
 }
 
 /// 対象ファイルかどうか判定
-fn is_target_file(name: &str, include_office: bool) -> bool {
+fn is_target_file(name: &str, include_docx: bool, include_xls: bool, include_km: bool) -> bool {
     if name.ends_with(".md") {
         return true;
     }
-    if include_office {
-        let lower = name.to_lowercase();
-        if lower.ends_with(".docx") || lower.ends_with(".xlsx") || lower.ends_with(".xlsm") {
-            return true;
-        }
+    let lower = name.to_lowercase();
+    if include_docx && lower.ends_with(".docx") {
+        return true;
+    }
+    if include_xls && (lower.ends_with(".xlsx") || lower.ends_with(".xlsm")) {
+        return true;
+    }
+    if include_km && lower.ends_with(".km") {
+        return true;
     }
     false
 }
 
 /// ディレクトリを再帰的に読み取り、対象ファイルとフォルダのみ返す
-fn read_dir_recursive(dir: &Path, depth: u32, include_office: bool) -> Vec<FileEntry> {
+fn read_dir_recursive(dir: &Path, depth: u32, include_docx: bool, include_xls: bool, include_km: bool) -> Vec<FileEntry> {
     if depth > 5 {
         return Vec::new();
     }
@@ -49,7 +53,7 @@ fn read_dir_recursive(dir: &Path, depth: u32, include_office: bool) -> Vec<FileE
         }
 
         if path.is_dir() {
-            let children = read_dir_recursive(&path, depth + 1, include_office);
+            let children = read_dir_recursive(&path, depth + 1, include_docx, include_xls, include_km);
             // 対象ファイルを含むフォルダのみ表示
             if !children.is_empty() {
                 entries.push(FileEntry {
@@ -59,7 +63,7 @@ fn read_dir_recursive(dir: &Path, depth: u32, include_office: bool) -> Vec<FileE
                     children: Some(children),
                 });
             }
-        } else if is_target_file(&name, include_office) {
+        } else if is_target_file(&name, include_docx, include_xls, include_km) {
             entries.push(FileEntry {
                 name,
                 path: path.to_string_lossy().to_string(),
@@ -73,12 +77,23 @@ fn read_dir_recursive(dir: &Path, depth: u32, include_office: bool) -> Vec<FileE
 
 /// ディレクトリのファイルツリーを取得する Tauri コマンド
 #[tauri::command]
-pub fn get_file_tree(dir_path: String, include_office: Option<bool>) -> Result<Vec<FileEntry>, String> {
+pub fn get_file_tree(
+    dir_path: String,
+    include_docx: Option<bool>,
+    include_xls: Option<bool>,
+    include_km: Option<bool>,
+) -> Result<Vec<FileEntry>, String> {
     let path = Path::new(&dir_path);
     if !path.exists() || !path.is_dir() {
         return Err("ディレクトリが存在しません".to_string());
     }
-    Ok(read_dir_recursive(path, 0, include_office.unwrap_or(false)))
+    Ok(read_dir_recursive(
+        path,
+        0,
+        include_docx.unwrap_or(false),
+        include_xls.unwrap_or(false),
+        include_km.unwrap_or(false),
+    ))
 }
 
 /// Markdown ファイルを読み込んでパースする Tauri コマンド

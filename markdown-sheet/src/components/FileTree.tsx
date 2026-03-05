@@ -6,6 +6,13 @@ interface Props {
   entries: FileEntry[];
   activeFile: string | null;
   onSelectFile: (path: string) => void;
+  onRefresh?: () => void;
+  filterDocx: boolean;
+  filterXls: boolean;
+  filterKm: boolean;
+  onToggleDocx: () => void;
+  onToggleXls: () => void;
+  onToggleKm: () => void;
 }
 
 const FileTreeNode: FC<{
@@ -53,27 +60,74 @@ const FileTreeNode: FC<{
   );
 };
 
-const FileTree: FC<Props> = ({ entries, activeFile, onSelectFile }) => {
-  if (entries.length === 0) {
-    return (
-      <div className="file-tree">
-        <div className="tree-empty">フォルダを開いてください</div>
-      </div>
-    );
-  }
-
+const FileTree: FC<Props> = ({
+  entries,
+  activeFile,
+  onSelectFile,
+  onRefresh,
+  filterDocx,
+  filterXls,
+  filterKm,
+  onToggleDocx,
+  onToggleXls,
+  onToggleKm,
+}) => {
   return (
-    <div className="file-tree">
-      {entries.map((entry) => (
-        <FileTreeNode
-          key={entry.path}
-          entry={entry}
-          activeFile={activeFile}
-          onSelectFile={onSelectFile}
-          depth={0}
-        />
-      ))}
-    </div>
+    <>
+      <div className="file-tree-toolbar">
+        <button
+          className="file-tree-toolbar-btn"
+          onClick={onRefresh}
+          title="ツリーを再読込"
+        >
+          ↻
+        </button>
+        <div className="file-tree-toolbar-sep" />
+        <button
+          className="file-tree-filter-btn active"
+          disabled
+          title=".md (常に表示)"
+        >
+          .md
+        </button>
+        <button
+          className={`file-tree-filter-btn ${filterDocx ? "active" : ""}`}
+          onClick={onToggleDocx}
+          title=".docx 表示切替"
+        >
+          .docx
+        </button>
+        <button
+          className={`file-tree-filter-btn ${filterXls ? "active" : ""}`}
+          onClick={onToggleXls}
+          title=".xlsx/.xlsm 表示切替"
+        >
+          .xls*
+        </button>
+        <button
+          className={`file-tree-filter-btn ${filterKm ? "active" : ""}`}
+          onClick={onToggleKm}
+          title=".km 表示切替"
+        >
+          .km
+        </button>
+      </div>
+      <div className="file-tree">
+        {entries.length === 0 ? (
+          <div className="tree-empty">フォルダを開いてください</div>
+        ) : (
+          entries.map((entry) => (
+            <FileTreeNode
+              key={entry.path}
+              entry={entry}
+              activeFile={activeFile}
+              onSelectFile={onSelectFile}
+              depth={0}
+            />
+          ))
+        )}
+      </div>
+    </>
   );
 };
 

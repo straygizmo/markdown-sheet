@@ -291,30 +291,50 @@ function App() {
   }, [autoSave]);
 
   // --- Office viewer ---
-  const [officeViewer, setOfficeViewer] = useState(
-    () => localStorage.getItem("md-office-viewer") === "true"
-  );
   const [officeFileData, setOfficeFileData] = useState<Uint8Array | null>(null);
   const [officeFileType, setOfficeFileType] = useState<string | null>(null);
 
-  const handleOfficeViewerChange = useCallback((enabled: boolean) => {
-    setOfficeViewer(enabled);
-    localStorage.setItem("md-office-viewer", String(enabled));
+  // --- File type filters ---
+  const migrateOld = localStorage.getItem("md-office-viewer") === "true";
+  const [filterDocx, setFilterDocx] = useState(
+    () => localStorage.getItem("md-filter-docx") !== null
+      ? localStorage.getItem("md-filter-docx") === "true"
+      : migrateOld
+  );
+  const [filterXls, setFilterXls] = useState(
+    () => localStorage.getItem("md-filter-xls") !== null
+      ? localStorage.getItem("md-filter-xls") === "true"
+      : migrateOld
+  );
+  const [filterKm, setFilterKm] = useState(
+    () => localStorage.getItem("md-filter-km") === "true"
+  );
+
+  const toggleFilterDocx = useCallback(() => {
+    setFilterDocx((v) => { localStorage.setItem("md-filter-docx", String(!v)); return !v; });
+  }, []);
+  const toggleFilterXls = useCallback(() => {
+    setFilterXls((v) => { localStorage.setItem("md-filter-xls", String(!v)); return !v; });
+  }, []);
+  const toggleFilterKm = useCallback(() => {
+    setFilterKm((v) => { localStorage.setItem("md-filter-km", String(!v)); return !v; });
   }, []);
 
-  // フォルダツリーをOffice設定変更時に再取得
+  // フォルダツリーをフィルター変更時に再取得
   useEffect(() => {
     if (!folderPath) return;
     (async () => {
       try {
         const entries: FileEntry[] = await invoke("get_file_tree", {
           dirPath: folderPath,
-          includeOffice: officeViewer,
+          includeDocx: filterDocx,
+          includeXls: filterXls,
+          includeKm: filterKm,
         });
         setFileTree(entries);
       } catch { /* ignore */ }
     })();
-  }, [officeViewer, folderPath]);
+  }, [filterDocx, filterXls, filterKm, folderPath]);
 
   // ファイルツリーを再取得するコールバック
   const refreshFileTree = useCallback(async () => {
@@ -322,11 +342,13 @@ function App() {
     try {
       const entries: FileEntry[] = await invoke("get_file_tree", {
         dirPath: folderPath,
-        includeOffice: officeViewer,
+        includeDocx: filterDocx,
+        includeXls: filterXls,
+        includeKm: filterKm,
       });
       setFileTree(entries);
     } catch { /* ignore */ }
-  }, [folderPath, officeViewer]);
+  }, [folderPath, filterDocx, filterXls, filterKm]);
 
   // --- Recent files ---
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => {
@@ -555,7 +577,7 @@ function App() {
 
   // ====== File Loading ======
 
-  const OFFICE_EXTENSIONS = [".docx", ".xlsx", ".xlsm"];
+  const OFFICE_EXTENSIONS = [".docx", ".xlsx", ".xlsm", ".km"];
   const getOfficeExt = (filePath: string): string | null => {
     const lower = filePath.toLowerCase();
     return OFFICE_EXTENSIONS.find((ext) => lower.endsWith(ext)) ?? null;
@@ -795,23 +817,29 @@ function App() {
     try {
       const entries: FileEntry[] = await invoke("get_file_tree", {
         dirPath: selected,
-        includeOffice: officeViewer,
+        includeDocx: filterDocx,
+        includeXls: filterXls,
+        includeKm: filterKm,
       });
       setFileTree(entries);
       setFolderPath(selected);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
     }
-  }, [officeViewer]);
+  }, [filterDocx, filterXls, filterKm]);
 
   // --- File open ---
   const handleOpenFile = useCallback(async () => {
     let selected: string | null = null;
     try {
+      const officeExts: string[] = [];
+      if (filterDocx) officeExts.push("docx");
+      if (filterXls) officeExts.push("xlsx", "xlsm");
+      if (filterKm) officeExts.push("km");
       selected = await open({
         filters: [
           { name: "Markdown", extensions: ["md", "markdown", "txt"] },
-          ...(officeViewer ? [{ name: "Office", extensions: ["docx", "xlsx", "xlsm"] }] : []),
+          ...(officeExts.length > 0 ? [{ name: "Office", extensions: officeExts }] : []),
           { name: "All", extensions: ["*"] },
         ],
       });
@@ -822,7 +850,7 @@ function App() {
     }
     if (!selected) return;
     await loadFile(selected);
-  }, [loadFile, officeViewer]);
+  }, [loadFile, filterDocx, filterXls, filterKm]);
 
   // --- Save ---
   const handleSave = useCallback(async () => {
@@ -1772,6 +1800,13 @@ function App() {
               entries={fileTree}
               activeFile={activeFile}
               onSelectFile={loadFile}
+              onRefresh={refreshFileTree}
+              filterDocx={filterDocx}
+              filterXls={filterXls}
+              filterKm={filterKm}
+              onToggleDocx={toggleFilterDocx}
+              onToggleXls={toggleFilterXls}
+              onToggleKm={toggleFilterKm}
             />
           ) : (
             <OutlinePanel content={content} onHeadingClick={handleOutlineClick} />
@@ -1990,8 +2025,6 @@ function App() {
           settings={aiSettings}
           onSave={handleSaveAiSettings}
           onClose={() => setShowSettings(false)}
-          officeViewer={officeViewer}
-          onOfficeViewerChange={handleOfficeViewerChange}
         />
       )}
 
