@@ -636,6 +636,26 @@ function App() {
 
   const loadFile = useCallback(
     async (filePath: string) => {
+      // ファイルの親フォルダをフォルダツリーで開く
+      const openParentFolder = async () => {
+        const sep = filePath.includes("\\") ? "\\" : "/";
+        const parts = filePath.split(sep);
+        parts.pop();
+        const parentDir = parts.join(sep);
+        if (!parentDir) return;
+        try {
+          const entries: FileEntry[] = await invoke("get_file_tree", {
+            dirPath: parentDir,
+            includeDocx: filterDocx,
+            includeXls: filterXls,
+            includeKm: filterKm,
+          });
+          setFileTree(entries);
+          setFolderPath(parentDir);
+          addRecentFolder(parentDir);
+        } catch { /* ignore */ }
+      };
+
       // すでに開いているタブがあればそこに切り替える
       const existing = tabsRef.current.find((t) => t.filePath === filePath);
       if (existing) {
@@ -665,6 +685,7 @@ function App() {
           setMindmapFileData(null);
           setMindmapFileType(null);
         }
+        await openParentFolder();
         return;
       }
 
@@ -716,6 +737,7 @@ function App() {
             reset([]);
           }
           addRecentFile(filePath);
+          await openParentFolder();
           return;
         }
 
@@ -766,6 +788,7 @@ function App() {
             reset([]);
           }
           addRecentFile(filePath);
+          await openParentFolder();
           return;
         }
 
@@ -845,12 +868,13 @@ function App() {
         }
 
         addRecentFile(filePath);
+        await openParentFolder();
       } catch (e) {
         console.error("ファイル読み込みエラー:", e);
         showToast("ファイル読み込みに失敗しました", true);
       }
     },
-    [reset, switchToTab, addRecentFile, saveCurrentToTab]
+    [reset, switchToTab, addRecentFile, saveCurrentToTab, filterDocx, filterXls, filterKm, addRecentFolder]
   );
 
   // --- Self-write guard for file watcher feedback loop prevention ---
