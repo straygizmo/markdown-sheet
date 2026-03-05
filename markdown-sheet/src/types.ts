@@ -49,6 +49,13 @@ export interface RecentFile {
   ts: number;
 }
 
+/** 最近開いたフォルダのエントリ */
+export interface RecentFolder {
+  path: string;
+  name: string;
+  ts: number;
+}
+
 /** AI API 設定 */
 export interface AiSettings {
   provider: string;

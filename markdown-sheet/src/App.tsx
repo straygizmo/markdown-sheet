@@ -17,7 +17,7 @@ import { useTableEditor } from "./hooks/useTableEditor";
 import { callAI } from "./lib/callAI";
 import { makeHeadingId } from "./lib/headingId";
 import { parseMarkdown, rebuildDocument } from "./lib/markdownParser";
-import type { AiSettings, FileEntry, MarkdownTable, ParsedDocument, RecentFile, Tab } from "./types";
+import type { AiSettings, FileEntry, MarkdownTable, ParsedDocument, RecentFile, RecentFolder, Tab } from "./types";
 
 // ========== AI & Template Constants ==========
 
@@ -363,6 +363,23 @@ function App() {
       const filtered = prev.filter((f) => f.path !== filePath);
       const next = [{ path: filePath, name, ts: Date.now() }, ...filtered].slice(0, 10);
       localStorage.setItem("md-recent-files", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // --- Recent folders ---
+  const [recentFolders, setRecentFolders] = useState<RecentFolder[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("md-recent-folders") || "[]");
+    } catch { return []; }
+  });
+
+  const addRecentFolder = useCallback((folderPathStr: string) => {
+    const name = folderPathStr.split(/[\\/]/).pop() ?? folderPathStr;
+    setRecentFolders((prev) => {
+      const filtered = prev.filter((f) => f.path !== folderPathStr);
+      const next = [{ path: folderPathStr, name, ts: Date.now() }, ...filtered].slice(0, 10);
+      localStorage.setItem("md-recent-folders", JSON.stringify(next));
       return next;
     });
   }, []);
@@ -823,10 +840,29 @@ function App() {
       });
       setFileTree(entries);
       setFolderPath(selected);
+      addRecentFolder(selected);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
     }
-  }, [filterDocx, filterXls, filterKm]);
+  }, [filterDocx, filterXls, filterKm, addRecentFolder]);
+
+  // --- Open recent folder ---
+  const handleOpenRecentFolder = useCallback(async (path: string) => {
+    try {
+      const entries: FileEntry[] = await invoke("get_file_tree", {
+        dirPath: path,
+        includeDocx: filterDocx,
+        includeXls: filterXls,
+        includeKm: filterKm,
+      });
+      setFileTree(entries);
+      setFolderPath(path);
+      addRecentFolder(path);
+    } catch (e) {
+      console.error("フォルダ読み込みエラー:", e);
+      showToast("フォルダを開けませんでした", true);
+    }
+  }, [filterDocx, filterXls, filterKm, addRecentFolder]);
 
   // --- File open ---
   const handleOpenFile = useCallback(async () => {
@@ -1718,7 +1754,9 @@ function App() {
         activeViewTab={activeViewTab}
         editorVisible={editorVisible}
         recentFiles={recentFiles}
+        recentFolders={recentFolders}
         onOpenFolder={handleOpenFolder}
+        onOpenRecentFolder={handleOpenRecentFolder}
         onOpenFile={handleOpenFile}
         onOpenRecent={loadFile}
         onSave={handleSave}

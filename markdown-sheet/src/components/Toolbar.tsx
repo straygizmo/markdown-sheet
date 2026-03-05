@@ -1,5 +1,5 @@
 import { type FC, useEffect, useRef, useState } from "react";
-import type { RecentFile } from "../types";
+import type { RecentFile, RecentFolder } from "../types";
 import "./Toolbar.css";
 
 interface Props {
@@ -10,7 +10,9 @@ interface Props {
   activeViewTab: "preview" | "table";
   editorVisible: boolean;
   recentFiles: RecentFile[];
+  recentFolders: RecentFolder[];
   onOpenFolder: () => void;
+  onOpenRecentFolder: (path: string) => void;
   onOpenFile: () => void;
   onOpenRecent: (path: string) => void;
   onSave: () => void;
@@ -36,7 +38,9 @@ const Toolbar: FC<Props> = ({
   activeViewTab,
   editorVisible,
   recentFiles,
+  recentFolders,
   onOpenFolder,
+  onOpenRecentFolder,
   onOpenFile,
   onOpenRecent,
   onSave,
@@ -54,19 +58,24 @@ const Toolbar: FC<Props> = ({
   onOpenSettings,
 }) => {
   const [showRecent, setShowRecent] = useState(false);
+  const [showRecentFolders, setShowRecentFolders] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const folderDropdownRef = useRef<HTMLDivElement>(null);
 
   // ドロップダウン外クリックで閉じる
   useEffect(() => {
-    if (!showRecent) return;
+    if (!showRecent && !showRecentFolders) return;
     const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (showRecent && dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowRecent(false);
+      }
+      if (showRecentFolders && folderDropdownRef.current && !folderDropdownRef.current.contains(e.target as Node)) {
+        setShowRecentFolders(false);
       }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [showRecent]);
+  }, [showRecent, showRecentFolders]);
 
   return (
     <div className="toolbar">
@@ -76,6 +85,36 @@ const Toolbar: FC<Props> = ({
         <button onClick={onOpenFolder} title="フォルダを開く">
           <span className="icon">&#128193;</span> フォルダ
         </button>
+        <div className="toolbar-dropdown-wrap" ref={folderDropdownRef}>
+          <button
+            onClick={() => setShowRecentFolders((v) => !v)}
+            title="最近開いたフォルダ"
+            className={`folder-history-btn${showRecentFolders ? " active-dropdown" : ""}`}
+          >
+            &#9660;
+          </button>
+          {showRecentFolders && (
+            <div className="toolbar-dropdown">
+              {recentFolders.length === 0 ? (
+                <div className="dropdown-empty">履歴なし</div>
+              ) : (
+                recentFolders.map((f) => (
+                  <div
+                    key={f.path}
+                    className="dropdown-item"
+                    title={f.path}
+                    onClick={() => {
+                      onOpenRecentFolder(f.path);
+                      setShowRecentFolders(false);
+                    }}
+                  >
+                    {f.name}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
         <button onClick={onOpenFile} title="ファイルを開く">
           <span className="icon">&#128196;</span> 開く
         </button>
@@ -84,9 +123,9 @@ const Toolbar: FC<Props> = ({
           <button
             onClick={() => setShowRecent((v) => !v)}
             title="最近開いたファイル"
-            className={showRecent ? "active-dropdown" : ""}
+            className={`folder-history-btn${showRecent ? " active-dropdown" : ""}`}
           >
-            &#128221; 履歴
+            ▼
           </button>
           {showRecent && (
             <div className="toolbar-dropdown">
