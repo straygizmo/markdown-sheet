@@ -11,6 +11,7 @@ import SearchReplace from "./components/SearchReplace";
 import StatusBar from "./components/StatusBar";
 import TabBar from "./components/TabBar";
 import TableEditor from "./components/TableEditor";
+import Terminal from "./components/Terminal";
 import Toolbar from "./components/Toolbar";
 import { useFileWatcher } from "./hooks/useFileWatcher";
 import { useTableEditor } from "./hooks/useTableEditor";
@@ -280,6 +281,7 @@ function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [activeViewTab, setActiveViewTab] = useState<ViewTab>("preview");
   const [editorVisible, setEditorVisible] = useState(true);
+  const [terminalVisible, setTerminalVisible] = useState(false);
   const [leftPanel, setLeftPanel] = useState<"folder" | "outline">("folder");
 
   // --- Auto-save ---
@@ -414,6 +416,9 @@ function App() {
   // --- Editor pane ---
   const [editorRatio, setEditorRatio] = useState(40);
   const containerRef = useRef<HTMLDivElement>(null);
+  // --- Terminal pane ---
+  const [terminalRatio, setTerminalRatio] = useState(30);
+  const appBodyRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -1671,6 +1676,9 @@ function App() {
       } else if (e.ctrlKey && e.key === "\\") {
         e.preventDefault();
         setEditorVisible((v) => !v);
+      } else if (e.ctrlKey && e.key === "`") {
+        e.preventDefault();
+        setTerminalVisible((v) => !v);
       } else if (e.ctrlKey && e.key === "t") {
         e.preventDefault();
         openNewTab();
@@ -1737,6 +1745,34 @@ function App() {
     [editorRatio]
   );
 
+  // --- Terminal divider drag ---
+  const handleTerminalMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const body = appBodyRef.current;
+      if (!body) return;
+      const startX = e.clientX;
+      const bodyRect = body.getBoundingClientRect();
+      const startRatio = terminalRatio;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        // dragging left increases terminal width
+        const deltaX = startX - e.clientX;
+        const newRatio = startRatio + (deltaX / bodyRect.width) * 100;
+        setTerminalRatio(Math.max(10, Math.min(60, newRatio)));
+      };
+
+      const handleMouseUp = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [terminalRatio]
+  );
+
   // 現在のファイルがOfficeかどうか
   const isOfficeFile = !!(officeFileData && officeFileType);
 
@@ -1770,7 +1806,9 @@ function App() {
         onExportDocx={handleExportDocx}
         onCopyRichText={handleCopyRichText}
         onPasteFromClipboard={handlePasteFromClipboard}
+        terminalVisible={terminalVisible}
         onToggleEditor={() => setEditorVisible((v) => !v)}
+        onToggleTerminal={() => setTerminalVisible((v) => !v)}
         onOpenSettings={() => setShowSettings(true)}
       />
 
@@ -1816,7 +1854,7 @@ function App() {
         </div>
       )}
 
-      <div className="app-body">
+      <div className="app-body" ref={appBodyRef}>
         {/* 左パネル（フォルダ / アウトライン） */}
         <div className="left-panel">
           <div className="left-panel-tabs">
@@ -1857,7 +1895,6 @@ function App() {
             <PreviewPanel
               content=""
               filePath={activeFile}
-              folderPath={folderPath}
               theme={theme}
               officeFileData={officeFileData}
               officeFileType={officeFileType}
@@ -2025,7 +2062,6 @@ function App() {
             <PreviewPanel
               content={content}
               filePath={activeFile}
-              folderPath={folderPath}
               previewRef={previewRef}
               aiSettings={aiSettings}
               onUpdateMermaidBlock={handleUpdateMermaidBlock}
@@ -2047,6 +2083,26 @@ function App() {
             onDeleteColumn={handleDeleteColumn}
             onExportCsv={handleExportCsv}
           />
+        )}
+
+        {/* ターミナルパネル（右端） */}
+        {terminalVisible && (
+          <>
+            <div className="divider" onMouseDown={handleTerminalMouseDown} />
+            <div
+              className="terminal-panel"
+              style={{ flex: `0 0 ${terminalRatio}%` }}
+            >
+              <div className="terminal-panel-header">
+                <span>ターミナル</span>
+              </div>
+              <Terminal
+                cwd={activeFile ? activeFile.replace(/[\\/][^\\/]*$/, "") : folderPath ?? "C:\\"}
+                visible={terminalVisible}
+                theme={theme}
+              />
+            </div>
+          </>
         )}
       </div>
 

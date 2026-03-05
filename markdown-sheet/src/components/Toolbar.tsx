@@ -9,6 +9,7 @@ interface Props {
   theme: "light" | "dark";
   activeViewTab: "preview" | "table";
   editorVisible: boolean;
+  terminalVisible: boolean;
   recentFiles: RecentFile[];
   recentFolders: RecentFolder[];
   onOpenFolder: () => void;
@@ -27,6 +28,7 @@ interface Props {
   onCopyRichText: () => void;
   onPasteFromClipboard: () => void;
   onToggleEditor: () => void;
+  onToggleTerminal: () => void;
   onOpenSettings: () => void;
 }
 
@@ -37,6 +39,7 @@ const Toolbar: FC<Props> = ({
   theme,
   activeViewTab,
   editorVisible,
+  terminalVisible,
   recentFiles,
   recentFolders,
   onOpenFolder,
@@ -55,6 +58,7 @@ const Toolbar: FC<Props> = ({
   onCopyRichText,
   onPasteFromClipboard,
   onToggleEditor,
+  onToggleTerminal,
   onOpenSettings,
 }) => {
   const [showRecent, setShowRecent] = useState(false);
@@ -189,6 +193,12 @@ const Toolbar: FC<Props> = ({
               title={`エディタを${editorVisible ? "非表示" : "表示"} (Ctrl+\\)`}
             >
               {editorVisible ? "◀ エディタ" : "▶ エディタ"}
+            </button>
+            <button
+              onClick={onToggleTerminal}
+              title={`ターミナルを${terminalVisible ? "非表示" : "表示"} (Ctrl+\`)`}
+            >
+              {terminalVisible ? "ターミナル ▶" : "ターミナル ◀"}
             </button>
 
             <div className="toolbar-separator" />
