@@ -37,6 +37,53 @@
   top: -99999px;
 }
 
+/* Context menu */
+.km-context-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 140px;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-primary, #222);
+  user-select: none;
+}
+
+.km-context-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+
+.km-context-menu-item:hover {
+  background: var(--accent-blue, #e3f2fd);
+}
+
+.km-submenu-arrow {
+  font-size: 9px;
+  margin-left: 12px;
+  opacity: 0.6;
+}
+
+.km-context-submenu {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  min-width: 120px;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  padding: 4px 0;
+}
+
 /* Inline text editor for node editing (F2 / double-click) */
 .mindmap-container .km-edit-textarea {
   position: absolute;

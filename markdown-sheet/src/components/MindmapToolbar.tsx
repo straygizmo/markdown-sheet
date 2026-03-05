@@ -31,8 +31,6 @@ interface Props {
   onAddChild: () => void;
   onAddSibling: () => void;
   onDeleteNode: () => void;
-  onSetPriority: (p: number) => void;
-  onSetProgress: (p: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   onSave: () => void;
@@ -49,8 +47,6 @@ const MindmapToolbar: FC<Props> = ({
   onAddChild,
   onAddSibling,
   onDeleteNode,
-  onSetPriority,
-  onSetProgress,
   onUndo,
   onRedo,
   onSave,
@@ -86,34 +82,6 @@ const MindmapToolbar: FC<Props> = ({
       <button className="mm-tb-btn mm-tb-delete" onClick={onDeleteNode} title="ノード削除 (Delete)">
         ✕ 削除
       </button>
-      <span className="mm-tb-sep" />
-
-      {/* Priority */}
-      <span className="mm-tb-label">優先度:</span>
-      {[0, 1, 2, 3, 4, 5].map((p) => (
-        <button
-          key={`p${p}`}
-          className="mm-tb-btn mm-tb-sm"
-          onClick={() => onSetPriority(p)}
-          title={p === 0 ? "優先度クリア" : `P${p}`}
-        >
-          {p === 0 ? "✕" : `P${p}`}
-        </button>
-      ))}
-      <span className="mm-tb-sep" />
-
-      {/* Progress */}
-      <span className="mm-tb-label">進捗:</span>
-      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((p) => (
-        <button
-          key={`prog${p}`}
-          className="mm-tb-btn mm-tb-sm"
-          onClick={() => onSetProgress(p)}
-          title={p === 0 ? "進捗クリア" : `${Math.round((p - 1) * 12.5)}%`}
-        >
-          {p === 0 ? "✕" : `${Math.round((p - 1) * 12.5)}%`}
-        </button>
-      ))}
       <span className="mm-tb-sep" />
 
       {/* Theme */}

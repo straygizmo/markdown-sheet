@@ -15,6 +15,111 @@ interface Props {
 
 const MAX_UNDO = 100;
 
+/** Build the context menu DOM tree (pure DOM, no React state) */
+function buildContextMenu(
+  minder: MinderInstance,
+  pushSnapshot: () => void,
+  closeMenu: () => void,
+): HTMLDivElement {
+  const menu = document.createElement("div");
+  menu.className = "km-context-menu";
+
+  const makeItem = (label: string, onClick?: () => void): HTMLDivElement => {
+    const item = document.createElement("div");
+    item.className = "km-context-menu-item";
+    item.textContent = label;
+    if (onClick) {
+      item.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onClick();
+      });
+    }
+    return item;
+  };
+
+  const makeSubmenuItem = (label: string, buildSub: () => HTMLDivElement): HTMLDivElement => {
+    const item = document.createElement("div");
+    item.className = "km-context-menu-item km-has-submenu";
+    const labelSpan = document.createElement("span");
+    labelSpan.textContent = label;
+    const arrow = document.createElement("span");
+    arrow.className = "km-submenu-arrow";
+    arrow.textContent = "▶";
+    item.appendChild(labelSpan);
+    item.appendChild(arrow);
+
+    let sub: HTMLDivElement | null = null;
+    item.addEventListener("mouseenter", () => {
+      if (!sub) {
+        sub = buildSub();
+        item.appendChild(sub);
+      }
+      sub.style.display = "";
+    });
+    item.addEventListener("mouseleave", () => {
+      if (sub) sub.style.display = "none";
+    });
+    return item;
+  };
+
+  const execAndClose = (cmd: string, ...args: unknown[]) => {
+    closeMenu();
+    pushSnapshot();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (minder as any).execCommand(cmd, ...args);
+  };
+
+  // 挿入 submenu
+  const insertItem = makeSubmenuItem("挿入", () => {
+    const sub = document.createElement("div");
+    sub.className = "km-context-submenu";
+    sub.appendChild(makeItem("トピック", () => execAndClose("AppendSiblingNode")));
+    sub.appendChild(makeItem("サブトピック", () => execAndClose("AppendChildNode")));
+    return sub;
+  });
+
+  // マーカー submenu
+  const markerItem = makeSubmenuItem("マーカー", () => {
+    const sub = document.createElement("div");
+    sub.className = "km-context-submenu";
+
+    // 優先度
+    const prioItem = makeSubmenuItem("優先度", () => {
+      const prioSub = document.createElement("div");
+      prioSub.className = "km-context-submenu";
+      prioSub.appendChild(makeItem("なし", () => execAndClose("Priority", 0)));
+      for (let p = 1; p <= 5; p++) {
+        prioSub.appendChild(makeItem(`優先度 ${p}`, () => execAndClose("Priority", p)));
+      }
+      return prioSub;
+    });
+    sub.appendChild(prioItem);
+
+    // 進捗
+    const progItem = makeSubmenuItem("進捗", () => {
+      const progSub = document.createElement("div");
+      progSub.className = "km-context-submenu";
+      progSub.appendChild(makeItem("なし", () => execAndClose("Progress", 0)));
+      for (let p = 1; p <= 9; p++) {
+        progSub.appendChild(makeItem(`${Math.round(((p - 1) / 8) * 100)}%`, () => execAndClose("Progress", p)));
+      }
+      return progSub;
+    });
+    sub.appendChild(progItem);
+
+    return sub;
+  });
+
+  menu.appendChild(insertItem);
+  menu.appendChild(markerItem);
+
+  // Prevent clicks inside menu from closing it via the global listener
+  menu.addEventListener("mousedown", (e) => e.stopPropagation());
+
+  return menu;
+}
+
 const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave, onDirtyChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const minderRef = useRef<MinderInstance | null>(null);
@@ -36,6 +141,9 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
   const editInputRef = useRef<HTMLTextAreaElement | null>(null);
   const editNodeRef = useRef<MinderNodeInstance | null>(null);
   const startEditNodeRef = useRef<(node: MinderNodeInstance) => void>(() => {});
+
+  // Context menu ref (DOM-based, not React state)
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const markDirty = useCallback(() => {
     setDirty(true);
@@ -256,9 +364,45 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     };
     containerEl.addEventListener("dblclick", handleDomDblClick);
 
+    // Context menu (pure DOM, no React state to avoid re-render interference)
+    const closeMenu = () => {
+      if (contextMenuRef.current) {
+        contextMenuRef.current.remove();
+        contextMenuRef.current = null;
+      }
+    };
+
+    const handleGlobalMouseDown = (e: MouseEvent) => {
+      const menu = contextMenuRef.current;
+      if (menu && !menu.contains(e.target as Node)) {
+        closeMenu();
+      }
+    };
+
+    const handleContextMenuNative = (e: MouseEvent) => {
+      e.preventDefault();
+      const selected = minder.getSelectedNode();
+      if (!selected) return;
+
+      // Remove previous menu if any
+      closeMenu();
+
+      const menu = buildContextMenu(minder, pushSnapshot, closeMenu);
+      menu.style.left = `${e.clientX}px`;
+      menu.style.top = `${e.clientY}px`;
+      document.body.appendChild(menu);
+      contextMenuRef.current = menu;
+    };
+
+    containerEl.addEventListener("contextmenu", handleContextMenuNative, true);
+    document.addEventListener("mousedown", handleGlobalMouseDown, true);
+
     return () => {
       minder.off("dblclick", handleDblClick);
       containerEl.removeEventListener("dblclick", handleDomDblClick);
+      containerEl.removeEventListener("contextmenu", handleContextMenuNative, true);
+      document.removeEventListener("mousedown", handleGlobalMouseDown, true);
+      closeMenu();
       // Cleanup: remove SVG from DOM
       if (containerRef.current) {
         containerRef.current.innerHTML = "";
@@ -404,20 +548,6 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
     minder.execCommand("RemoveNode");
   }, [pushSnapshot]);
 
-  const handleSetPriority = useCallback((p: number) => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    pushSnapshot();
-    minder.execCommand("Priority", p);
-  }, [pushSnapshot]);
-
-  const handleSetProgress = useCallback((p: number) => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    pushSnapshot();
-    minder.execCommand("Progress", p);
-  }, [pushSnapshot]);
-
   if (error) {
     return (
       <div className="mindmap-error">
@@ -439,8 +569,6 @@ const MindmapEditor: FC<Props> = ({ fileData, fileType, filePath, theme, onSave,
         onAddChild={handleAddChild}
         onAddSibling={handleAddSibling}
         onDeleteNode={handleDeleteNode}
-        onSetPriority={handleSetPriority}
-        onSetProgress={handleSetProgress}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onSave={handleSave}
