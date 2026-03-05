@@ -892,6 +892,9 @@ function App() {
       return;
     }
 
+    // Mindmap/Office files are not reloaded via text watcher
+    if (getMindmapExt(currentFile) || getOfficeExt(currentFile)) return;
+
     try {
       const text = await readTextFile(currentFile);
       const doc = parseMarkdown(text);
@@ -992,6 +995,8 @@ function App() {
   // --- Save ---
   const handleSave = useCallback(async () => {
     if (!activeFile) return;
+    // Mindmap files are saved via handleMindmapSave (triggered from MindmapEditor)
+    if (getMindmapExt(activeFile)) return;
     try {
       lastWriteRef.current = Date.now();
       if (activeViewTab === "table") {
@@ -1091,6 +1096,8 @@ function App() {
         : activeFile;
       await writeTextFile(savePath, jsonStr);
       setDirty(false);
+      setMindmapFileData(new TextEncoder().encode(jsonStr));
+      setMindmapFileType(".km");
       const currentId = activeTabIdRef.current;
       setTabs((prev) =>
         prev.map((t) => (t.id === currentId ? { ...t, dirty: false, filePath: savePath } : t))
