@@ -490,6 +490,49 @@ function buildContextMenu(
   return menu;
 }
 
+/** Module-level cache to remember viewport position per file path across remounts */
+const viewportCache = new Map<string, { tx: number; ty: number; zoom: number }>();
+
+/** Read viewport state (pan translate + zoom) from the minder */
+function getViewport(minder: MinderInstance): { tx: number; ty: number; zoom: number } | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = minder as any;
+  try {
+    const dragger = m._viewDragger || m.getViewDragger?.();
+    const movement = dragger?.getMovement?.();
+    const zoomValue = m._zoomValue ?? 100;
+    if (movement && typeof movement.x === "number") {
+      return { tx: movement.x, ty: movement.y, zoom: zoomValue };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/** Restore viewport state (pan translate + zoom) on the minder */
+function restoreViewport(minder: MinderInstance, state: { tx: number; ty: number; zoom: number }): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m = minder as any;
+  try {
+    // Restore zoom via the minder's own zoom() method (sets paper viewport + _zoomValue)
+    if (typeof m.zoom === "function") {
+      m._zoomValue = state.zoom;
+      m.zoom(state.zoom);
+    }
+    // Restore pan position via dragger.moveTo with a kity.Point
+    // (moveTo calls position.round() which requires a kity.Point instance)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kity = window.kity as any;
+    const dragger = m._viewDragger || m.getViewDragger?.();
+    if (dragger?.moveTo && kity?.Point) {
+      dragger.moveTo(new kity.Point(state.tx, state.ty));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export interface MindmapEditorHandle {
   getJson: () => KityMinderJson | null;
 }
@@ -746,6 +789,19 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
         initializedRef.current = true;
         // Apply dark mode text fix after initial render
         applyMainTopicTextFix();
+
+        // Restore saved viewport position (pan/zoom) if available.
+        // kityminder fires 'paperrender' → camera command centers the view
+        // with animation (viewAnimationDuration). Wait for that to finish,
+        // then override with saved state.
+        const savedVp = viewportCache.get(filePath);
+        if (savedVp) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const animDuration = (minder as any).getOption?.("viewAnimationDuration") || 300;
+          setTimeout(() => {
+            restoreViewport(minder, savedVp);
+          }, animDuration + 100);
+        }
       } catch (e) {
         console.error("マインドマップの読み込みエラー:", e);
         setError(`ファイルの読み込みに失敗しました: ${e instanceof Error ? e.message : String(e)}`);
@@ -915,7 +971,25 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     containerEl.addEventListener("contextmenu", handleContextMenuNative, true);
     document.addEventListener("mousedown", handleGlobalMouseDown, true);
 
+    // Save viewport state on every view change (pan/zoom) so the cache is always up-to-date.
+    // This is more reliable than saving on unmount, since React may detach DOM before cleanup.
+    let viewportSaveEnabled = false; // skip the initial camera positioning
+    const handleViewChange = () => {
+      if (!viewportSaveEnabled) return;
+      const vp = getViewport(minder);
+      if (vp) {
+        viewportCache.set(filePath, vp);
+      }
+    };
+    minder.on("viewchange", handleViewChange);
+    minder.on("viewchanged", handleViewChange);
+    // Enable saving after initial camera + viewport restore animations complete.
+    // Initial camera takes ~viewAnimationDuration, restore adds another ~100ms after that.
+    setTimeout(() => { viewportSaveEnabled = true; }, 1000);
+
     return () => {
+      minder.off("viewchange", handleViewChange);
+      minder.off("viewchanged", handleViewChange);
       minder.off("dblclick", handleDblClick);
       minder.off("hyperlinkclick", handleHyperlinkClick);
       minder.off("shownoterequest", handleShowNote);
