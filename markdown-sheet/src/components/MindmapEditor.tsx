@@ -668,6 +668,30 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
   // Keep the ref in sync so event handlers always use the latest function
   startEditNodeRef.current = startEditNode;
 
+  // Force main-topic text to black always.
+  // The dark-mode CSS `[fill="black"]` override changes sub-topic text to light gray,
+  // but main topics should stay black (they have their own light background).
+  // Setting data color to "#000" (not the literal "black") bypasses the CSS selector.
+  const applyMainTopicTextFix = useCallback(() => {
+    const minder = minderRef.current;
+    if (!minder || !initializedRef.current) return;
+    const root = minder.getRoot();
+    if (!root) return;
+    let changed = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (root as any).traverse?.((node: MinderNodeInstance) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const type = (node as any).getType?.();
+      if (type === "main" && node.getData("color") !== "#000") {
+        node.setData("color", "#000");
+        changed = true;
+      }
+    });
+    if (changed) {
+      minder.refresh();
+    }
+  }, []);
+
   // Initialize minder
   useEffect(() => {
     if (!containerRef.current || !window.kityminder) {
@@ -720,6 +744,8 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
         setDirty(false);
         onDirtyChange(false);
         initializedRef.current = true;
+        // Apply dark mode text fix after initial render
+        applyMainTopicTextFix();
       } catch (e) {
         console.error("マインドマップの読み込みエラー:", e);
         setError(`ファイルの読み込みに失敗しました: ${e instanceof Error ? e.message : String(e)}`);
@@ -938,24 +964,39 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
       if (!dirty) {
         markDirty();
       }
+      // Re-apply main-topic color fix for newly added nodes
+      applyMainTopicTextFix();
     };
 
     minder.on("contentchange", handleChange);
     return () => {
       minder.off("contentchange", handleChange);
     };
-  }, [dirty, pushSnapshot, markDirty]);
+  }, [dirty, pushSnapshot, markDirty, applyMainTopicTextFix]);
 
   // Clear any inline background set by kityminder's setTheme so CSS var(--bg-base) applies
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.style.background = "";
     }
-  }, [theme]);
+    applyMainTopicTextFix();
+  }, [theme, applyMainTopicTextFix]);
 
   const handleSave = useCallback(() => {
     const minder = minderRef.current;
     if (!minder) return;
+    // Strip main-topic color overrides before export so the file stays theme-neutral
+    const root = minder.getRoot();
+    if (root) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (root as any).traverse?.((node: MinderNodeInstance) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const type = (node as any).getType?.();
+        if (type === "main" && node.getData("color") === "#000") {
+          node.setData("color", null);
+        }
+      });
+    }
     const json = minder.exportJson();
     // Preserve theme and layout
     json.theme = currentTheme;
@@ -963,7 +1004,9 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     onSave(json);
     setDirty(false);
     onDirtyChange(false);
-  }, [currentTheme, currentLayout, onSave, onDirtyChange]);
+    // Re-apply the fix after export
+    applyMainTopicTextFix();
+  }, [currentTheme, currentLayout, onSave, onDirtyChange, applyMainTopicTextFix]);
 
   const handleChangeTheme = useCallback((themeId: string) => {
     const minder = minderRef.current;
@@ -978,7 +1021,9 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
     if (!dirty) {
       markDirty();
     }
-  }, [pushSnapshot, dirty, markDirty]);
+    // Re-apply main-topic color fix after theme change (theme resets node colors)
+    applyMainTopicTextFix();
+  }, [pushSnapshot, dirty, markDirty, applyMainTopicTextFix]);
 
   const handleChangeLayout = useCallback((layoutId: string) => {
     const minder = minderRef.current;
