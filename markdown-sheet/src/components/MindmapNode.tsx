@@ -4,7 +4,7 @@ import type { MindmapNodeData } from "../lib/mindmapLayout";
 
 const PROGRESS_LABELS = ["", "0%", "13%", "25%", "38%", "50%", "63%", "75%", "88%", "100%"];
 
-function MindmapNode({ data, selected }: NodeProps) {
+function MindmapNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as MindmapNodeData;
   const { label, depth, direction, themeColors, priority, progress, hyperlink, note, image, imageSize } = d;
 
@@ -62,6 +62,10 @@ function MindmapNode({ data, selected }: NodeProps) {
           className="mm-icon mm-note-icon"
           onMouseEnter={handleNoteEnter}
           onMouseLeave={handleNoteLeave}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent("mindmap-open-note", { detail: id }));
+          }}
         >
           📝
           {noteHover && (

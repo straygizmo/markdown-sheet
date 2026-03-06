@@ -254,7 +254,16 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
   const [currentLayout, setCurrentLayout] = useState<LayoutDirection>("right");
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const selectedNodeId = useMemo(() => {
+    if (selectedNodeIds.size === 0) return null;
+    let last: string | null = null;
+    for (const id of selectedNodeIds) last = id;
+    return last;
+  }, [selectedNodeIds]);
+  const selectNode = useCallback((id: string | null) => {
+    setSelectedNodeIds(id ? new Set([id]) : new Set());
+  }, []);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
 
@@ -330,10 +339,8 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
 
   // Add editing overlay data to nodes
   const displayNodes = useMemo(() => {
-    return nodes.map((n) =>
-      n.id === selectedNodeId ? { ...n, selected: true } : n,
-    );
-  }, [nodes, selectedNodeId]);
+    return nodes.map((n) => ({ ...n, selected: selectedNodeIds.has(n.id) }));
+  }, [nodes, selectedNodeIds]);
 
   // Load data
   useEffect(() => {
@@ -349,7 +356,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
 
         const internal = assignIds(jsonData.root);
         setTree(internal);
-        setSelectedNodeId(internal.id);
+        selectNode(internal.id);
 
         if (jsonData.theme) setCurrentTheme(jsonData.theme);
         if (jsonData.template) {
@@ -469,7 +476,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
       markDirty();
       // Select parent or sibling
       const newSelection = parent.children[Math.min(index, parent.children.length - 1)]?.id || parent.id;
-      setSelectedNodeId(newSelection);
+      selectNode(newSelection);
     },
     [pushSnapshot, markDirty],
   );
@@ -625,6 +632,12 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
     [],
   );
 
+  useEffect(() => {
+    const handler = (e: Event) => handleOpenNote((e as CustomEvent).detail);
+    window.addEventListener("mindmap-open-note", handler);
+    return () => window.removeEventListener("mindmap-open-note", handler);
+  }, [handleOpenNote]);
+
   const handleDeleteNote = useCallback(
     (nodeId: string) => {
       mutateTree((clone) => {
@@ -656,7 +669,6 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
       if (editingNodeId && editingNodeId !== node.id) {
         commitEdit();
       }
-      setSelectedNodeId(node.id);
       setContextMenu(null);
     },
     [editingNodeId, commitEdit],
@@ -673,7 +685,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
     (event: React.MouseEvent, node: Node) => {
       event.preventDefault();
       if (readOnly) return;
-      setSelectedNodeId(node.id);
+      selectNode(node.id);
       setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
     },
     [readOnly],
@@ -683,6 +695,13 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
     if (editingNodeId) commitEdit();
     setContextMenu(null);
   }, [editingNodeId, commitEdit]);
+
+  const handleSelectionChange = useCallback(
+    ({ nodes: selNodes }: { nodes: Node[] }) => {
+      setSelectedNodeIds(new Set(selNodes.map((n) => n.id)));
+    },
+    [],
+  );
 
   const handleMoveEnd = useCallback(
     (_: unknown, viewport: Viewport) => {
@@ -729,7 +748,19 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
 
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        deleteNode(selectedNodeId);
+        if (selectedNodeIds.size > 1) {
+          const idsToDelete = new Set(selectedNodeIds);
+          mutateTree((clone) => {
+            const removeMarked = (node: MindmapInternalNode) => {
+              node.children = node.children.filter((c) => !idsToDelete.has(c.id));
+              node.children.forEach(removeMarked);
+            };
+            removeMarked(clone);
+          });
+          selectNode(treeRef.current?.id || null);
+        } else {
+          deleteNode(selectedNodeId);
+        }
         return;
       }
 
@@ -738,7 +769,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
         e.stopPropagation();
         const newId = insertChild(selectedNodeId);
         if (newId) {
-          setSelectedNodeId(newId);
+          selectNode(newId);
           requestAnimationFrame(() => startEdit(newId));
         }
         return;
@@ -751,7 +782,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
         if (selectedNodeId === treeRef.current.id) return;
         const newId = insertSibling(selectedNodeId);
         if (newId) {
-          setSelectedNodeId(newId);
+          selectNode(newId);
           requestAnimationFrame(() => startEdit(newId));
         }
         return;
@@ -760,15 +791,16 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
       // Arrow key navigation
       if (e.key.startsWith("Arrow")) {
         e.preventDefault();
-        navigateArrow(e.key, selectedNodeId, treeRef.current, currentLayout, setSelectedNodeId);
+        navigateArrow(e.key, selectedNodeId, treeRef.current, currentLayout, selectNode);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [
-    readOnly, editingNodeId, selectedNodeId, currentLayout, notePanel,
+    readOnly, editingNodeId, selectedNodeId, selectedNodeIds, currentLayout, notePanel,
     handleSave, handleUndo, handleRedo, startEdit, deleteNode, insertChild, insertSibling,
+    selectNode, mutateTree,
   ]);
 
   // Close context menu on outside click
@@ -813,14 +845,15 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
           onNodeDoubleClick={handleNodeDoubleClick}
           onNodeContextMenu={handleNodeContextMenu}
           onPaneClick={handlePaneClick}
+          onSelectionChange={handleSelectionChange}
           onMoveEnd={handleMoveEnd}
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
-          selectNodesOnDrag={false}
-          panOnDrag
+          selectionOnDrag
+          panOnDrag={[2]}
           zoomOnScroll
           zoomOnPinch
+          zoomOnDoubleClick={false}
           minZoom={0.1}
           maxZoom={3}
           fitView={!viewportCache.has(filePath)}
@@ -857,7 +890,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
             const newId = insertChild(contextMenu.nodeId);
             setContextMenu(null);
             if (newId) {
-              setSelectedNodeId(newId);
+              selectNode(newId);
               requestAnimationFrame(() => startEdit(newId));
             }
           }}
@@ -865,7 +898,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
             const newId = insertSibling(contextMenu.nodeId);
             setContextMenu(null);
             if (newId) {
-              setSelectedNodeId(newId);
+              selectNode(newId);
               requestAnimationFrame(() => startEdit(newId));
             }
           }}
