@@ -7,6 +7,7 @@ export function useScrollSync(
   activeViewTab: string,
   officeFileData: Uint8Array | null,
   officeFileType: string | null,
+  activeTabId: string,
 ) {
   const [syncScroll, setSyncScroll] = useState(
     () => localStorage.getItem("md-sync-scroll") !== "false"
@@ -18,6 +19,7 @@ export function useScrollSync(
   }, [syncScroll]);
 
   useEffect(() => {
+    isSyncingRef.current = false;
     if (!syncScroll || !editorVisible || activeViewTab !== "preview") return;
     const editor = editorRef.current;
     const preview = previewRef.current;
@@ -45,7 +47,7 @@ export function useScrollSync(
       editor.removeEventListener("scroll", syncFromEditor);
       preview.removeEventListener("scroll", syncFromPreview);
     };
-  }, [syncScroll, editorVisible, activeViewTab, officeFileData, officeFileType, editorRef, previewRef]);
+  }, [syncScroll, editorVisible, activeViewTab, officeFileData, officeFileType, editorRef, previewRef, activeTabId]);
 
   return { syncScroll, setSyncScroll } as const;
 }

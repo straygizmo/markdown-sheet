@@ -136,7 +136,7 @@ function App() {
 
   // --- Scroll sync ---
   const { syncScroll, setSyncScroll } = useScrollSync(
-    editorRef, previewRef, editorVisible, activeViewTab, officeFileData, officeFileType
+    editorRef, previewRef, editorVisible, activeViewTab, officeFileData, officeFileType, activeTabId
   );
 
   // ====== Tab Management ======
