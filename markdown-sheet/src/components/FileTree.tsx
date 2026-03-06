@@ -19,6 +19,7 @@ interface Props {
   showXlsBtn?: boolean;
   showKmBtn?: boolean;
   showImagesBtn?: boolean;
+  onImageDragStart?: (path: string) => void;
 }
 
 function getFileIcon(name: string): string {
@@ -36,8 +37,9 @@ const FileTreeNode: FC<{
   entry: FileEntry;
   activeFile: string | null;
   onSelectFile: (path: string) => void;
+  onImageDragStart?: (path: string) => void;
   depth: number;
-}> = ({ entry, activeFile, onSelectFile, depth }) => {
+}> = ({ entry, activeFile, onSelectFile, onImageDragStart, depth }) => {
   const [expanded, setExpanded] = useState(true);
 
   if (entry.is_dir) {
@@ -58,6 +60,7 @@ const FileTreeNode: FC<{
               entry={child}
               activeFile={activeFile}
               onSelectFile={onSelectFile}
+              onImageDragStart={onImageDragStart}
               depth={depth + 1}
             />
           ))}
@@ -65,11 +68,19 @@ const FileTreeNode: FC<{
     );
   }
 
+  const isImage = !!entry.name.toLowerCase().match(/\.(png|jpe?g|gif|bmp|svg|webp)$/);
+
   return (
     <div
       className={`tree-item tree-file ${activeFile === entry.path ? "active" : ""}`}
       style={{ paddingLeft: depth * 16 + 8 }}
       onClick={() => onSelectFile(entry.path)}
+      onMouseDown={isImage && onImageDragStart ? (e) => {
+        if (e.button === 0) {
+          e.preventDefault();
+          onImageDragStart(entry.path);
+        }
+      } : undefined}
     >
       <span className="tree-icon tree-file-icon">{getFileIcon(entry.name) || "·"}</span>
       <span className="tree-label">{entry.name}</span>
@@ -94,6 +105,7 @@ const FileTree: FC<Props> = ({
   showXlsBtn = true,
   showKmBtn = true,
   showImagesBtn = false,
+  onImageDragStart,
 }) => {
   return (
     <>
@@ -113,6 +125,15 @@ const FileTree: FC<Props> = ({
         >
           .md
         </button>
+        {showImagesBtn && (
+          <button
+            className={`file-tree-filter-btn ${filterImages ? "active" : ""}`}
+            onClick={onToggleImages}
+            title="画像ファイル 表示切替"
+          >
+            🖼️
+          </button>
+        )}
         {showDocxBtn && (
           <button
             className={`file-tree-filter-btn ${filterDocx ? "active" : ""}`}
@@ -140,15 +161,6 @@ const FileTree: FC<Props> = ({
             .km/.xmind
           </button>
         )}
-        {showImagesBtn && (
-          <button
-            className={`file-tree-filter-btn ${filterImages ? "active" : ""}`}
-            onClick={onToggleImages}
-            title="画像ファイル 表示切替"
-          >
-            🖼️
-          </button>
-        )}
       </div>
       <div className="file-tree">
         {entries.length === 0 ? (
@@ -160,6 +172,7 @@ const FileTree: FC<Props> = ({
               entry={entry}
               activeFile={activeFile}
               onSelectFile={onSelectFile}
+              onImageDragStart={onImageDragStart}
               depth={0}
             />
           ))

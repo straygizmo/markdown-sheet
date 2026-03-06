@@ -22,6 +22,7 @@ interface LeftPanelProps {
   showXlsBtn: boolean;
   showKmBtn: boolean;
   showImagesBtn: boolean;
+  onImageDragStart?: (path: string) => void;
   // OutlinePanel
   content: string;
   onHeadingClick: (headingId: string) => void;
@@ -46,6 +47,7 @@ export default function LeftPanel({
   showXlsBtn,
   showKmBtn,
   showImagesBtn,
+  onImageDragStart,
   content,
   onHeadingClick,
 }: LeftPanelProps) {
@@ -83,6 +85,7 @@ export default function LeftPanel({
           showXlsBtn={showXlsBtn}
           showKmBtn={showKmBtn}
           showImagesBtn={showImagesBtn}
+          onImageDragStart={onImageDragStart}
         />
       ) : (
         <OutlinePanel content={content} onHeadingClick={onHeadingClick} />

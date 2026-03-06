@@ -52,6 +52,8 @@ function App() {
   const [fileTree, setFileTree] = useState<FileEntry[]>([]);
   const [folderPath, setFolderPath] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  const activeFileRef = useRef<string | null>(null);
+  activeFileRef.current = activeFile;
   const [content, setContent] = useState("");
   const [originalLines, setOriginalLines] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -1370,6 +1372,67 @@ function App() {
   const handleContentChangeRef = useRef(handleContentChange);
   handleContentChangeRef.current = handleContentChange;
 
+  // --- Image drag from tree to editor (mouse-event based) ---
+  const handleImageDragStart = useCallback((path: string) => {
+    const ghost = document.createElement("div");
+    ghost.textContent = "🖼️ " + (path.split(/[\\/]/).pop() ?? "");
+    ghost.style.cssText =
+      "position:fixed;pointer-events:none;z-index:9999;background:var(--bg-overlay,#333);color:var(--text,#fff);padding:4px 8px;border-radius:4px;font-size:12px;opacity:0.9;white-space:nowrap;";
+    document.body.appendChild(ghost);
+
+    const onMove = (e: MouseEvent) => {
+      ghost.style.left = e.clientX + 12 + "px";
+      ghost.style.top = e.clientY + 12 + "px";
+    };
+
+    const onUp = async (e: MouseEvent) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      ghost.remove();
+
+      const textarea = editorRef.current;
+      if (!textarea) return;
+      const rect = textarea.getBoundingClientRect();
+      if (
+        e.clientX < rect.left || e.clientX > rect.right ||
+        e.clientY < rect.top || e.clientY > rect.bottom
+      ) return;
+
+      try {
+        // Compute relative path from the active markdown file to the image
+        const activeFilePath = activeFileRef.current;
+        let imageSrc: string;
+        if (activeFilePath) {
+          const activeDir = activeFilePath.replace(/[\\/][^\\/]+$/, "");
+          // Normalize to forward slashes for path computation
+          const from = activeDir.replace(/\\/g, "/").split("/");
+          const to = path.replace(/\\/g, "/").split("/");
+          // Find common prefix length
+          let common = 0;
+          while (common < from.length && common < to.length && from[common] === to[common]) {
+            common++;
+          }
+          const ups = from.length - common;
+          const rel = [...Array(ups).fill(".."), ...to.slice(common)].join("/");
+          imageSrc = rel;
+        } else {
+          imageSrc = path.replace(/\\/g, "/");
+        }
+        const altText = path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "image";
+        const insertText = `![${altText}](${imageSrc})`;
+
+        const pos = textarea.selectionStart;
+        const newContent = contentRef.current.substring(0, pos) + insertText + contentRef.current.substring(pos);
+        handleContentChangeRef.current(newContent);
+      } catch {
+        // ignore
+      }
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
 
@@ -1579,6 +1642,7 @@ function App() {
           showXlsBtn={showXlsBtn}
           showKmBtn={showKmBtn}
           showImagesBtn={showImagesBtn}
+          onImageDragStart={handleImageDragStart}
           content={content}
           onHeadingClick={handleOutlineClick}
         />

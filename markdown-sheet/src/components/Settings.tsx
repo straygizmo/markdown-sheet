@@ -213,6 +213,18 @@ const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSa
         </div>
 
         <div className="settings-section">
+          <div className="settings-section-title">画像</div>
+          <label className="settings-toggle-row">
+            <span>画像ボタンを表示</span>
+            <input
+              type="checkbox"
+              checked={localFilter.showImages}
+              onChange={(e) => setLocalFilter((s) => ({ ...s, showImages: e.target.checked }))}
+            />
+          </label>
+        </div>
+
+        <div className="settings-section">
           <div className="settings-section-title">Office 系ファイル</div>
           <label className="settings-toggle-row">
             <span>.docx ボタンを表示</span>
@@ -228,18 +240,6 @@ const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSa
               type="checkbox"
               checked={localFilter.showXls}
               onChange={(e) => setLocalFilter((s) => ({ ...s, showXls: e.target.checked }))}
-            />
-          </label>
-        </div>
-
-        <div className="settings-section">
-          <div className="settings-section-title">画像</div>
-          <label className="settings-toggle-row">
-            <span>画像ボタンを表示</span>
-            <input
-              type="checkbox"
-              checked={localFilter.showImages}
-              onChange={(e) => setLocalFilter((s) => ({ ...s, showImages: e.target.checked }))}
             />
           </label>
         </div>
