@@ -812,6 +812,12 @@ function App() {
           const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
 
           if (isCurrentEmpty) {
+            const effectiveFolder = activeFolderPath === "" ? filePath.replace(/[\\/][^\\/]+$/, "") : activeFolderPath;
+            if (effectiveFolder !== activeFolderPath) {
+              setActiveFolderPath(effectiveFolder);
+              setFolderPath(effectiveFolder);
+              getCurrentWindow().setTitle(`Markdown Studio : ${effectiveFolder}`);
+            }
             const currentId = activeTabIdRef.current;
             setActiveFile(filePath);
             setContent("");
@@ -821,17 +827,25 @@ function App() {
             setTabs((prev) =>
               prev.map((t) =>
                 t.id === currentId
-                  ? { ...t, filePath, folderPath: activeFolderPath, content: "", originalLines: [], tables: [], dirty: false }
+                  ? { ...t, filePath, folderPath: effectiveFolder, content: "", originalLines: [], tables: [], dirty: false }
                   : t
               )
             );
-            folderLastActiveTabRef.current[activeFolderPath] = currentId;
+            folderLastActiveTabRef.current[effectiveFolder] = currentId;
           } else {
             saveCurrentToTab();
+            const parentFolder = filePath.replace(/[\\/][^\\/]+$/, "");
+            const isUnderActiveFolder = activeFolderPath && (filePath.startsWith(activeFolderPath + "\\") || filePath.startsWith(activeFolderPath + "/"));
+            const targetFolder = isUnderActiveFolder ? activeFolderPath : parentFolder;
+            if (targetFolder !== activeFolderPath) {
+              setActiveFolderPath(targetFolder);
+              setFolderPath(targetFolder);
+              getCurrentWindow().setTitle(`Markdown Studio : ${targetFolder}`);
+            }
             const newTab: Tab = {
               id: crypto.randomUUID(),
               filePath,
-              folderPath: activeFolderPath,
+              folderPath: targetFolder,
               content: "",
               originalLines: [],
               tables: [],
@@ -846,7 +860,7 @@ function App() {
             setDirty(false);
             setActiveFile(filePath);
             reset([]);
-            folderLastActiveTabRef.current[activeFolderPath] = newTab.id;
+            folderLastActiveTabRef.current[targetFolder] = newTab.id;
           }
           addRecentFile(filePath);
           return;
@@ -865,6 +879,12 @@ function App() {
           const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
 
           if (isCurrentEmpty) {
+            const effectiveFolder = activeFolderPath === "" ? filePath.replace(/[\\/][^\\/]+$/, "") : activeFolderPath;
+            if (effectiveFolder !== activeFolderPath) {
+              setActiveFolderPath(effectiveFolder);
+              setFolderPath(effectiveFolder);
+              getCurrentWindow().setTitle(`Markdown Studio : ${effectiveFolder}`);
+            }
             const currentId = activeTabIdRef.current;
             setActiveFile(filePath);
             setContent("");
@@ -874,17 +894,25 @@ function App() {
             setTabs((prev) =>
               prev.map((t) =>
                 t.id === currentId
-                  ? { ...t, filePath, folderPath: activeFolderPath, content: "", originalLines: [], tables: [], dirty: false }
+                  ? { ...t, filePath, folderPath: effectiveFolder, content: "", originalLines: [], tables: [], dirty: false }
                   : t
               )
             );
-            folderLastActiveTabRef.current[activeFolderPath] = currentId;
+            folderLastActiveTabRef.current[effectiveFolder] = currentId;
           } else {
             saveCurrentToTab();
+            const parentFolder = filePath.replace(/[\\/][^\\/]+$/, "");
+            const isUnderActiveFolder = activeFolderPath && (filePath.startsWith(activeFolderPath + "\\") || filePath.startsWith(activeFolderPath + "/"));
+            const targetFolder = isUnderActiveFolder ? activeFolderPath : parentFolder;
+            if (targetFolder !== activeFolderPath) {
+              setActiveFolderPath(targetFolder);
+              setFolderPath(targetFolder);
+              getCurrentWindow().setTitle(`Markdown Studio : ${targetFolder}`);
+            }
             const newTab: Tab = {
               id: crypto.randomUUID(),
               filePath,
-              folderPath: activeFolderPath,
+              folderPath: targetFolder,
               content: "",
               originalLines: [],
               tables: [],
@@ -899,7 +927,7 @@ function App() {
             setDirty(false);
             setActiveFile(filePath);
             reset([]);
-            folderLastActiveTabRef.current[activeFolderPath] = newTab.id;
+            folderLastActiveTabRef.current[targetFolder] = newTab.id;
           }
           addRecentFile(filePath);
           return;
@@ -926,6 +954,12 @@ function App() {
         const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
         if (isCurrentEmpty) {
           // 空タブに上書き
+          const effectiveFolder = activeFolderPath === "" ? filePath.replace(/[\\/][^\\/]+$/, "") : activeFolderPath;
+          if (effectiveFolder !== activeFolderPath) {
+            setActiveFolderPath(effectiveFolder);
+            setFolderPath(effectiveFolder);
+            getCurrentWindow().setTitle(`Markdown Studio : ${effectiveFolder}`);
+          }
           const currentId = activeTabIdRef.current;
           setOriginalLines(doc.lines);
           reset(doc.tables);
@@ -943,7 +977,7 @@ function App() {
                 ? {
                     ...t,
                     filePath,
-                    folderPath: activeFolderPath,
+                    folderPath: effectiveFolder,
                     content: text,
                     originalLines: doc.lines,
                     tables: structuredClone(doc.tables),
@@ -954,14 +988,22 @@ function App() {
                 : t
             )
           );
-          folderLastActiveTabRef.current[activeFolderPath] = currentId;
+          folderLastActiveTabRef.current[effectiveFolder] = currentId;
         } else {
           // 新タブで開く
           saveCurrentToTab();
+          const parentFolder = filePath.replace(/[\\/][^\\/]+$/, "");
+          const isUnderActiveFolder = activeFolderPath && (filePath.startsWith(activeFolderPath + "\\") || filePath.startsWith(activeFolderPath + "/"));
+          const targetFolder = isUnderActiveFolder ? activeFolderPath : parentFolder;
+          if (targetFolder !== activeFolderPath) {
+            setActiveFolderPath(targetFolder);
+            setFolderPath(targetFolder);
+            getCurrentWindow().setTitle(`Markdown Studio : ${targetFolder}`);
+          }
           const newTab: Tab = {
             id: crypto.randomUUID(),
             filePath,
-            folderPath: activeFolderPath,
+            folderPath: targetFolder,
             content: text,
             originalLines: doc.lines,
             tables: structuredClone(doc.tables),
@@ -980,7 +1022,7 @@ function App() {
           setContentUndoAvailable(false);
           setContentRedoAvailable(false);
           reset(doc.tables);
-          folderLastActiveTabRef.current[activeFolderPath] = newTab.id;
+          folderLastActiveTabRef.current[targetFolder] = newTab.id;
         }
 
         addRecentFile(filePath);
