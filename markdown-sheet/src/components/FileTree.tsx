@@ -10,12 +10,15 @@ interface Props {
   filterDocx: boolean;
   filterXls: boolean;
   filterKm: boolean;
+  filterImages: boolean;
   onToggleDocx: () => void;
   onToggleXls: () => void;
   onToggleKm: () => void;
+  onToggleImages: () => void;
   showDocxBtn?: boolean;
   showXlsBtn?: boolean;
   showKmBtn?: boolean;
+  showImagesBtn?: boolean;
 }
 
 function getFileIcon(name: string): string {
@@ -25,6 +28,7 @@ function getFileIcon(name: string): string {
   if (lower.match(/\.xls.?$/)) return "📗 ";
   if (lower.endsWith(".km")) return "💡 ";
   if (lower.endsWith(".xmind")) return "📕 ";
+  if (lower.match(/\.(png|jpe?g|gif|bmp|svg|webp)$/)) return "🖼️ ";
   return "";
 }
 
@@ -81,12 +85,15 @@ const FileTree: FC<Props> = ({
   filterDocx,
   filterXls,
   filterKm,
+  filterImages,
   onToggleDocx,
   onToggleXls,
   onToggleKm,
+  onToggleImages,
   showDocxBtn = true,
   showXlsBtn = true,
   showKmBtn = true,
+  showImagesBtn = false,
 }) => {
   return (
     <>
@@ -131,6 +138,15 @@ const FileTree: FC<Props> = ({
             title=".km/.xmind 表示切替"
           >
             .km/.xmind
+          </button>
+        )}
+        {showImagesBtn && (
+          <button
+            className={`file-tree-filter-btn ${filterImages ? "active" : ""}`}
+            onClick={onToggleImages}
+            title="画像ファイル 表示切替"
+          >
+            🖼️
           </button>
         )}
       </div>

@@ -28,7 +28,7 @@ import { useScrollSync } from "./hooks/useScrollSync";
 import { useTableEditor } from "./hooks/useTableEditor";
 import { useTheme } from "./hooks/useTheme";
 import { useToast } from "./hooks/useToast";
-import { getOfficeExt, getMindmapExt, makeInitialTab, MERMAID_TEMPLATES, TRANSFORM_OPTIONS, MINDMAP_EXTENSIONS } from "./lib/constants";
+import { getOfficeExt, getMindmapExt, getImageExt, makeInitialTab, MERMAID_TEMPLATES, TRANSFORM_OPTIONS, MINDMAP_EXTENSIONS } from "./lib/constants";
 import { parseMarkdown, rebuildDocument } from "./lib/markdownParser";
 import type { KityMinderJson } from "./lib/mindmapTypes";
 import type { FileEntry, MarkdownTable, Tab } from "./types";
@@ -79,11 +79,39 @@ function App() {
   const [mindmapFileType, setMindmapFileType] = useState<string | null>(null);
   const mindmapEditorRef = useRef<MindmapEditorHandle>(null);
 
+  // --- Image preview ---
+  const [imageBlobUrl, setImageBlobUrl] = useState<string | null>(null);
+  const imageBlobUrlRef = useRef<string | null>(null);
+
+  const clearImagePreview = useCallback(() => {
+    if (imageBlobUrlRef.current) {
+      URL.revokeObjectURL(imageBlobUrlRef.current);
+      imageBlobUrlRef.current = null;
+    }
+    setImageBlobUrl(null);
+  }, []);
+
+  const loadImagePreview = useCallback(async (filePath: string) => {
+    clearImagePreview();
+    try {
+      const bytes = await readFile(filePath);
+      const ext = filePath.toLowerCase().split(".").pop() ?? "";
+      const mimeMap: Record<string, string> = {
+        png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+        gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp",
+      };
+      const blob = new Blob([bytes], { type: mimeMap[ext] ?? "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      imageBlobUrlRef.current = url;
+      setImageBlobUrl(url);
+    } catch { /* ignore */ }
+  }, [clearImagePreview]);
+
   // --- File filters ---
   const {
-    filterDocx, filterXls, filterKm,
-    toggleFilterDocx, toggleFilterXls, toggleFilterKm,
-    showDocxBtn, showXlsBtn, showKmBtn,
+    filterDocx, filterXls, filterKm, filterImages,
+    toggleFilterDocx, toggleFilterXls, toggleFilterKm, toggleFilterImages,
+    showDocxBtn, showXlsBtn, showKmBtn, showImagesBtn,
     handleSaveFilterVisibility,
     refreshFileTree,
   } = useFileFilters(folderPath, setFileTree);
@@ -181,6 +209,7 @@ function App() {
       reset(newTab.tables);
       const officeExt = newTab.filePath ? getOfficeExt(newTab.filePath) : null;
       const mmExt = newTab.filePath ? getMindmapExt(newTab.filePath) : null;
+      const imgExt = newTab.filePath ? getImageExt(newTab.filePath) : null;
       if (officeExt && newTab.filePath) {
         readFile(newTab.filePath)
           .then((bytes) => {
@@ -193,6 +222,7 @@ function App() {
             setOfficeFileData(null);
             setOfficeFileType(null);
           });
+        clearImagePreview();
       } else if (mmExt && newTab.filePath) {
         readFile(newTab.filePath)
           .then((bytes) => {
@@ -205,11 +235,19 @@ function App() {
             setMindmapFileData(null);
             setMindmapFileType(null);
           });
+        clearImagePreview();
+      } else if (imgExt && newTab.filePath) {
+        loadImagePreview(newTab.filePath!);
+        setOfficeFileData(null);
+        setOfficeFileType(null);
+        setMindmapFileData(null);
+        setMindmapFileType(null);
       } else {
         setOfficeFileData(null);
         setOfficeFileType(null);
         setMindmapFileData(null);
         setMindmapFileType(null);
+        clearImagePreview();
       }
     },
     [saveCurrentToTab, reset]
@@ -268,9 +306,10 @@ function App() {
         getCurrentWindow().setTitle(newActive.folderPath ? `Markdown Studio : ${newActive.folderPath}` : "Markdown Studio");
         folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
 
-        // Office/Mindmap 状態を切り替え先タブに合わせて更新
+        // Office/Mindmap/Image 状態を切り替え先タブに合わせて更新
         const officeExt = newActive.filePath ? getOfficeExt(newActive.filePath) : null;
         const mmExt = newActive.filePath ? getMindmapExt(newActive.filePath) : null;
+        const imgExt = newActive.filePath ? getImageExt(newActive.filePath) : null;
         if (officeExt && newActive.filePath) {
           readFile(newActive.filePath)
             .then((bytes) => {
@@ -283,6 +322,7 @@ function App() {
               setOfficeFileData(null);
               setOfficeFileType(null);
             });
+          clearImagePreview();
         } else if (mmExt && newActive.filePath) {
           readFile(newActive.filePath)
             .then((bytes) => {
@@ -295,11 +335,19 @@ function App() {
               setMindmapFileData(null);
               setMindmapFileType(null);
             });
+          clearImagePreview();
+        } else if (imgExt && newActive.filePath) {
+          loadImagePreview(newActive.filePath!);
+          setOfficeFileData(null);
+          setOfficeFileType(null);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
         } else {
           setOfficeFileData(null);
           setOfficeFileType(null);
           setMindmapFileData(null);
           setMindmapFileType(null);
+          clearImagePreview();
         }
       }
 
@@ -324,6 +372,7 @@ function App() {
             includeDocx: filterDocx,
             includeXls: filterXls,
             includeKm: filterKm,
+            includeImages: filterImages,
           });
           setFileTree(entries);
           setFolderPath(folder);
@@ -335,7 +384,7 @@ function App() {
         getCurrentWindow().setTitle("Markdown Studio");
       }
     },
-    [activeFolderPath, switchToTab, filterDocx, filterXls, filterKm]
+    [activeFolderPath, switchToTab, filterDocx, filterXls, filterKm, filterImages]
   );
 
   const closeFolderTabs = useCallback(
@@ -370,9 +419,10 @@ function App() {
         getCurrentWindow().setTitle(newActive.folderPath ? `Markdown Studio : ${newActive.folderPath}` : "Markdown Studio");
         folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
 
-        // Office/Mindmap 状態を切り替え先タブに合わせて更新
+        // Office/Mindmap/Image 状態を切り替え先タブに合わせて更新
         const officeExt = newActive.filePath ? getOfficeExt(newActive.filePath) : null;
         const mmExt = newActive.filePath ? getMindmapExt(newActive.filePath) : null;
+        const imgExt = newActive.filePath ? getImageExt(newActive.filePath) : null;
         if (officeExt && newActive.filePath) {
           readFile(newActive.filePath)
             .then((bytes) => {
@@ -385,6 +435,7 @@ function App() {
               setOfficeFileData(null);
               setOfficeFileType(null);
             });
+          clearImagePreview();
         } else if (mmExt && newActive.filePath) {
           readFile(newActive.filePath)
             .then((bytes) => {
@@ -397,11 +448,19 @@ function App() {
               setMindmapFileData(null);
               setMindmapFileType(null);
             });
+          clearImagePreview();
+        } else if (imgExt && newActive.filePath) {
+          loadImagePreview(newActive.filePath!);
+          setOfficeFileData(null);
+          setOfficeFileType(null);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
         } else {
           setOfficeFileData(null);
           setOfficeFileType(null);
           setMindmapFileData(null);
           setMindmapFileType(null);
+          clearImagePreview();
         }
       }
 
@@ -420,6 +479,7 @@ function App() {
         switchToTab(existing.id);
         const officeExt = getOfficeExt(filePath);
         const mmExt = getMindmapExt(filePath);
+        const imgExt = getImageExt(filePath);
         if (officeExt) {
           try {
             const bytes = await readFile(filePath);
@@ -427,6 +487,7 @@ function App() {
             setOfficeFileType(officeExt);
             setMindmapFileData(null);
             setMindmapFileType(null);
+            clearImagePreview();
           } catch { /* ignore */ }
         } else if (mmExt) {
           try {
@@ -435,12 +496,20 @@ function App() {
             setMindmapFileType(mmExt);
             setOfficeFileData(null);
             setOfficeFileType(null);
+            clearImagePreview();
           } catch { /* ignore */ }
+        } else if (imgExt) {
+          loadImagePreview(filePath);
+          setOfficeFileData(null);
+          setOfficeFileType(null);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
         } else {
           setOfficeFileData(null);
           setOfficeFileType(null);
           setMindmapFileData(null);
           setMindmapFileType(null);
+          clearImagePreview();
         }
         return;
       }
@@ -453,6 +522,7 @@ function App() {
           setOfficeFileType(officeExt);
           setMindmapFileData(null);
           setMindmapFileType(null);
+          clearImagePreview();
 
           const currentTab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
           const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
@@ -519,6 +589,74 @@ function App() {
           setMindmapFileType(mmExt);
           setOfficeFileData(null);
           setOfficeFileType(null);
+          clearImagePreview();
+
+          const currentTab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+          const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
+
+          if (isCurrentEmpty) {
+            const effectiveFolder = activeFolderPath === "" ? filePath.replace(/[\\/][^\\/]+$/, "") : activeFolderPath;
+            if (effectiveFolder !== activeFolderPath) {
+              setActiveFolderPath(effectiveFolder);
+              setFolderPath(effectiveFolder);
+              getCurrentWindow().setTitle(`Markdown Studio : ${effectiveFolder}`);
+            }
+            const currentId = activeTabIdRef.current;
+            setActiveFile(filePath);
+            setContent("");
+            setOriginalLines([]);
+            setDirty(false);
+            reset([]);
+            setTabs((prev) =>
+              prev.map((t) =>
+                t.id === currentId
+                  ? { ...t, filePath, folderPath: effectiveFolder, content: "", originalLines: [], tables: [], dirty: false }
+                  : t
+              )
+            );
+            folderLastActiveTabRef.current[effectiveFolder] = currentId;
+          } else {
+            saveCurrentToTab();
+            const parentFolder = filePath.replace(/[\\/][^\\/]+$/, "");
+            const isUnderActiveFolder = activeFolderPath && (filePath.startsWith(activeFolderPath + "\\") || filePath.startsWith(activeFolderPath + "/"));
+            const targetFolder = isUnderActiveFolder ? activeFolderPath : parentFolder;
+            if (targetFolder !== activeFolderPath) {
+              setActiveFolderPath(targetFolder);
+              setFolderPath(targetFolder);
+              getCurrentWindow().setTitle(`Markdown Studio : ${targetFolder}`);
+            }
+            const newTab: Tab = {
+              id: crypto.randomUUID(),
+              filePath,
+              folderPath: targetFolder,
+              content: "",
+              originalLines: [],
+              tables: [],
+              dirty: false,
+              contentUndoStack: [],
+              contentRedoStack: [],
+            };
+            setTabs((prev) => [...prev, newTab]);
+            setActiveTabId(newTab.id);
+            setContent("");
+            setOriginalLines([]);
+            setDirty(false);
+            setActiveFile(filePath);
+            reset([]);
+            folderLastActiveTabRef.current[targetFolder] = newTab.id;
+          }
+          addRecentFile(filePath);
+          return;
+        }
+
+        // 画像ファイル
+        const imgExt = getImageExt(filePath);
+        if (imgExt) {
+          loadImagePreview(filePath);
+          setOfficeFileData(null);
+          setOfficeFileType(null);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
 
           const currentTab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
           const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
@@ -583,6 +721,7 @@ function App() {
         setOfficeFileType(null);
         setMindmapFileData(null);
         setMindmapFileType(null);
+        clearImagePreview();
 
         let doc;
         try {
@@ -685,6 +824,7 @@ function App() {
     const iv = setInterval(async () => {
       if (!dirtyRef.current || !activeFile) return;
       if (getOfficeExt(activeFile)) return;
+      if (getImageExt(activeFile)) return;
       if (activeFile.toLowerCase().endsWith(".xmind")) return;
       try {
         if (getMindmapExt(activeFile)) {
@@ -728,7 +868,7 @@ function App() {
       return;
     }
 
-    if (getMindmapExt(currentFile) || getOfficeExt(currentFile)) return;
+    if (getMindmapExt(currentFile) || getOfficeExt(currentFile) || getImageExt(currentFile)) return;
 
     try {
       const text = await readTextFile(currentFile);
@@ -821,12 +961,13 @@ function App() {
         includeDocx: filterDocx,
         includeXls: filterXls,
         includeKm: filterKm,
+        includeImages: filterImages,
       });
       openFolderAndActivateTab(selected, entries);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
     }
-  }, [filterDocx, filterXls, filterKm, openFolderAndActivateTab, showToast]);
+  }, [filterDocx, filterXls, filterKm, filterImages, openFolderAndActivateTab, showToast]);
 
   // --- Open recent folder ---
   const handleOpenRecentFolder = useCallback(async (path: string) => {
@@ -836,13 +977,14 @@ function App() {
         includeDocx: filterDocx,
         includeXls: filterXls,
         includeKm: filterKm,
+        includeImages: filterImages,
       });
       openFolderAndActivateTab(path, entries);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
       showToast("フォルダを開けませんでした", true);
     }
-  }, [filterDocx, filterXls, filterKm, openFolderAndActivateTab, showToast]);
+  }, [filterDocx, filterXls, filterKm, filterImages, openFolderAndActivateTab, showToast]);
 
   // --- File open ---
   const handleOpenFile = useCallback(async () => {
@@ -852,10 +994,13 @@ function App() {
       if (filterDocx) officeExts.push("docx");
       if (filterXls) officeExts.push("xlsx", "xlsm");
       if (filterKm) officeExts.push("km", "xmind");
+      const imageExts: string[] = [];
+      if (filterImages) imageExts.push("png", "jpg", "jpeg", "gif", "bmp", "svg", "webp");
       selected = await open({
         filters: [
           { name: "Markdown", extensions: ["md", "markdown", "txt"] },
           ...(officeExts.length > 0 ? [{ name: "Office", extensions: officeExts }] : []),
+          ...(imageExts.length > 0 ? [{ name: "Images", extensions: imageExts }] : []),
           { name: "All", extensions: ["*"] },
         ],
       });
@@ -866,7 +1011,7 @@ function App() {
     }
     if (!selected) return;
     await loadFile(selected);
-  }, [loadFile, filterDocx, filterXls, filterKm, showToast]);
+  }, [loadFile, filterDocx, filterXls, filterKm, filterImages, showToast]);
 
   // --- Save ---
   const handleSave = useCallback(async () => {
@@ -1354,6 +1499,7 @@ function App() {
   // 現在のファイルがOfficeかどうか
   const isOfficeFile = !!(officeFileData && officeFileType);
   const isMindmap = !!(mindmapFileData && mindmapFileType && activeFile);
+  const isImageFile = !!imageBlobUrl;
 
   const toolbarCanUndo = activeViewTab === "table" ? canUndo : contentUndoAvailable;
   const toolbarCanRedo = activeViewTab === "table" ? canRedo : contentRedoAvailable;
@@ -1424,12 +1570,15 @@ function App() {
           filterDocx={filterDocx}
           filterXls={filterXls}
           filterKm={filterKm}
+          filterImages={filterImages}
           onToggleDocx={toggleFilterDocx}
           onToggleXls={toggleFilterXls}
           onToggleKm={toggleFilterKm}
+          onToggleImages={toggleFilterImages}
           showDocxBtn={showDocxBtn}
           showXlsBtn={showXlsBtn}
           showKmBtn={showKmBtn}
+          showImagesBtn={showImagesBtn}
           content={content}
           onHeadingClick={handleOutlineClick}
         />
@@ -1462,6 +1611,14 @@ function App() {
               officeFileType={officeFileType}
               onOpenFile={loadFile}
               onRefreshFileTree={refreshFileTree}
+            />
+          </div>
+        ) : isImageFile ? (
+          <div className="content-area image-preview-area">
+            <img
+              src={imageBlobUrl!}
+              alt={activeFile?.replace(/^.*[\\/]/, "") ?? ""}
+              className="image-preview-img"
             />
           </div>
         ) : (
@@ -1587,7 +1744,7 @@ function App() {
           settings={aiSettings}
           onSave={handleSaveAiSettings}
           onClose={() => setShowSettings(false)}
-          filterVisibility={{ showDocx: showDocxBtn, showXls: showXlsBtn, showKm: showKmBtn }}
+          filterVisibility={{ showDocx: showDocxBtn, showXls: showXlsBtn, showKm: showKmBtn, showImages: showImagesBtn }}
           onSaveFilterVisibility={handleSaveFilterVisibility}
         />
       )}

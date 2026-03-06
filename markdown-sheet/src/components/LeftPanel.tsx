@@ -13,12 +13,15 @@ interface LeftPanelProps {
   filterDocx: boolean;
   filterXls: boolean;
   filterKm: boolean;
+  filterImages: boolean;
   onToggleDocx: () => void;
   onToggleXls: () => void;
   onToggleKm: () => void;
+  onToggleImages: () => void;
   showDocxBtn: boolean;
   showXlsBtn: boolean;
   showKmBtn: boolean;
+  showImagesBtn: boolean;
   // OutlinePanel
   content: string;
   onHeadingClick: (headingId: string) => void;
@@ -34,12 +37,15 @@ export default function LeftPanel({
   filterDocx,
   filterXls,
   filterKm,
+  filterImages,
   onToggleDocx,
   onToggleXls,
   onToggleKm,
+  onToggleImages,
   showDocxBtn,
   showXlsBtn,
   showKmBtn,
+  showImagesBtn,
   content,
   onHeadingClick,
 }: LeftPanelProps) {
@@ -68,12 +74,15 @@ export default function LeftPanel({
           filterDocx={filterDocx}
           filterXls={filterXls}
           filterKm={filterKm}
+          filterImages={filterImages}
           onToggleDocx={onToggleDocx}
           onToggleXls={onToggleXls}
           onToggleKm={onToggleKm}
+          onToggleImages={onToggleImages}
           showDocxBtn={showDocxBtn}
           showXlsBtn={showXlsBtn}
           showKmBtn={showKmBtn}
+          showImagesBtn={showImagesBtn}
         />
       ) : (
         <OutlinePanel content={content} onHeadingClick={onHeadingClick} />

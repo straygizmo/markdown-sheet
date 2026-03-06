@@ -139,6 +139,19 @@ body {
   overflow: hidden;
 }
 
+.image-preview-area {
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base);
+  overflow: auto;
+}
+
+.image-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 /* ========== Editor Panel ========== */
 .editor-panel {
   display: flex;

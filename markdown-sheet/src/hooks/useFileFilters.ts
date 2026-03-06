@@ -17,6 +17,9 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
   const [filterKm, setFilterKm] = useState(
     () => localStorage.getItem("md-filter-km") === "true"
   );
+  const [filterImages, setFilterImages] = useState(
+    () => localStorage.getItem("md-filter-images") === "true"
+  );
 
   const [showDocxBtn, setShowDocxBtn] = useState(
     () => localStorage.getItem("md-show-docx-btn") !== "false"
@@ -27,14 +30,19 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
   const [showKmBtn, setShowKmBtn] = useState(
     () => localStorage.getItem("md-show-km-btn") === "true"
   );
+  const [showImagesBtn, setShowImagesBtn] = useState(
+    () => localStorage.getItem("md-show-images-btn") === "true"
+  );
 
-  const handleSaveFilterVisibility = useCallback((v: { showDocx: boolean; showXls: boolean; showKm: boolean }) => {
+  const handleSaveFilterVisibility = useCallback((v: { showDocx: boolean; showXls: boolean; showKm: boolean; showImages: boolean }) => {
     setShowDocxBtn(v.showDocx);
     setShowXlsBtn(v.showXls);
     setShowKmBtn(v.showKm);
+    setShowImagesBtn(v.showImages);
     localStorage.setItem("md-show-docx-btn", String(v.showDocx));
     localStorage.setItem("md-show-xls-btn", String(v.showXls));
     localStorage.setItem("md-show-km-btn", String(v.showKm));
+    localStorage.setItem("md-show-images-btn", String(v.showImages));
     if (!v.showDocx && filterDocx) {
       setFilterDocx(false);
       localStorage.setItem("md-filter-docx", "false");
@@ -47,7 +55,11 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
       setFilterKm(false);
       localStorage.setItem("md-filter-km", "false");
     }
-  }, [filterDocx, filterXls, filterKm]);
+    if (!v.showImages && filterImages) {
+      setFilterImages(false);
+      localStorage.setItem("md-filter-images", "false");
+    }
+  }, [filterDocx, filterXls, filterKm, filterImages]);
 
   const toggleFilterDocx = useCallback(() => {
     setFilterDocx((v) => { localStorage.setItem("md-filter-docx", String(!v)); return !v; });
@@ -57,6 +69,9 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
   }, []);
   const toggleFilterKm = useCallback(() => {
     setFilterKm((v) => { localStorage.setItem("md-filter-km", String(!v)); return !v; });
+  }, []);
+  const toggleFilterImages = useCallback(() => {
+    setFilterImages((v) => { localStorage.setItem("md-filter-images", String(!v)); return !v; });
   }, []);
 
   // フォルダツリーをフィルター変更時に再取得
@@ -69,11 +84,12 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
           includeDocx: filterDocx,
           includeXls: filterXls,
           includeKm: filterKm,
+          includeImages: filterImages,
         });
         setFileTree(entries);
       } catch { /* ignore */ }
     })();
-  }, [filterDocx, filterXls, filterKm, folderPath, setFileTree]);
+  }, [filterDocx, filterXls, filterKm, filterImages, folderPath, setFileTree]);
 
   // ファイルツリーを再取得するコールバック
   const refreshFileTree = useCallback(async () => {
@@ -84,15 +100,16 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
         includeDocx: filterDocx,
         includeXls: filterXls,
         includeKm: filterKm,
+        includeImages: filterImages,
       });
       setFileTree(entries);
     } catch { /* ignore */ }
-  }, [folderPath, filterDocx, filterXls, filterKm, setFileTree]);
+  }, [folderPath, filterDocx, filterXls, filterKm, filterImages, setFileTree]);
 
   return {
-    filterDocx, filterXls, filterKm,
-    toggleFilterDocx, toggleFilterXls, toggleFilterKm,
-    showDocxBtn, showXlsBtn, showKmBtn,
+    filterDocx, filterXls, filterKm, filterImages,
+    toggleFilterDocx, toggleFilterXls, toggleFilterKm, toggleFilterImages,
+    showDocxBtn, showXlsBtn, showKmBtn, showImagesBtn,
     handleSaveFilterVisibility,
     refreshFileTree,
   } as const;

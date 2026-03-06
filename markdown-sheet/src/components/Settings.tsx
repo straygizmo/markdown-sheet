@@ -23,6 +23,7 @@ interface FilterVisibility {
   showDocx: boolean;
   showXls: boolean;
   showKm: boolean;
+  showImages: boolean;
 }
 
 interface Props {
@@ -227,6 +228,18 @@ const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSa
               type="checkbox"
               checked={localFilter.showXls}
               onChange={(e) => setLocalFilter((s) => ({ ...s, showXls: e.target.checked }))}
+            />
+          </label>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section-title">画像</div>
+          <label className="settings-toggle-row">
+            <span>画像ボタンを表示</span>
+            <input
+              type="checkbox"
+              checked={localFilter.showImages}
+              onChange={(e) => setLocalFilter((s) => ({ ...s, showImages: e.target.checked }))}
             />
           </label>
         </div>

@@ -174,6 +174,7 @@ export const MERMAID_TEMPLATES: { label: string; code: string }[] = [
 
 export const OFFICE_EXTENSIONS = [".docx", ".xlsx", ".xlsm"];
 export const MINDMAP_EXTENSIONS = [".km", ".xmind"];
+export const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp"];
 
 export function getOfficeExt(filePath: string): string | null {
   const lower = filePath.toLowerCase();
@@ -183,6 +184,11 @@ export function getOfficeExt(filePath: string): string | null {
 export function getMindmapExt(filePath: string): string | null {
   const lower = filePath.toLowerCase();
   return MINDMAP_EXTENSIONS.find((ext) => lower.endsWith(ext)) ?? null;
+}
+
+export function getImageExt(filePath: string): string | null {
+  const lower = filePath.toLowerCase();
+  return IMAGE_EXTENSIONS.find((ext) => lower.endsWith(ext)) ?? null;
 }
 
 export function makeInitialTab(folderPath = ""): Tab {

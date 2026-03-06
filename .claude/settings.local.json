@@ -14,7 +14,8 @@
       "WebFetch(domain:github.com)",
       "Bash(npx vite:*)",
       "Bash(ls:*)",
-      "Bash(npx grunt:*)"
+      "Bash(npx grunt:*)",
+      "Bash(git status:*)"
     ]
   }
 }
