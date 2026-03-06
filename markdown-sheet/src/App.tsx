@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile, readTextFile, writeTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -561,6 +562,7 @@ function App() {
       if (!newTab) return;
       setActiveTabId(tabId);
       setActiveFolderPath(newTab.folderPath);
+      getCurrentWindow().setTitle(newTab.folderPath ? `Markdown Studio : ${newTab.folderPath}` : "Markdown Studio");
       folderLastActiveTabRef.current[newTab.folderPath] = tabId;
       setContent(newTab.content);
       setOriginalLines(newTab.originalLines);
@@ -663,6 +665,7 @@ function App() {
         reset(newActive.tables);
         setActiveTabId(newActive.id);
         setActiveFolderPath(newActive.folderPath);
+        getCurrentWindow().setTitle(newActive.folderPath ? `Markdown Studio : ${newActive.folderPath}` : "Markdown Studio");
         folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
       }
 
@@ -693,10 +696,12 @@ function App() {
           });
           setFileTree(entries);
           setFolderPath(folder);
+          getCurrentWindow().setTitle(`Markdown Studio : ${folder}`);
         } catch { /* ignore */ }
       } else {
         setFileTree([]);
         setFolderPath(null);
+        getCurrentWindow().setTitle("Markdown Studio");
       }
     },
     [activeFolderPath, switchToTab, filterDocx, filterXls, filterKm]
@@ -735,6 +740,7 @@ function App() {
         reset(newActive.tables);
         setActiveTabId(newActive.id);
         setActiveFolderPath(newActive.folderPath);
+        getCurrentWindow().setTitle(newActive.folderPath ? `Markdown Studio : ${newActive.folderPath}` : "Markdown Studio");
         folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
       }
 
@@ -1061,6 +1067,7 @@ function App() {
   const openFolderAndActivateTab = useCallback((folderPath: string, entries: FileEntry[]) => {
     setFileTree(entries);
     setFolderPath(folderPath);
+    getCurrentWindow().setTitle(`Markdown Studio : ${folderPath}`);
     addRecentFolder(folderPath);
 
     // 既存タブにそのフォルダがあれば切り替える
