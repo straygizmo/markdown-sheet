@@ -200,10 +200,11 @@ import html2pdf from "html2pdf.js";
 type ViewTab = "preview" | "table";
 type Theme = "light" | "dark";
 
-function makeInitialTab(): Tab {
+function makeInitialTab(folderPath = ""): Tab {
   return {
     id: crypto.randomUUID(),
     filePath: null,
+    folderPath,
     content: "",
     originalLines: [],
     tables: [],
@@ -272,6 +273,8 @@ function App() {
   const initialTab = makeInitialTab();
   const [tabs, setTabs] = useState<Tab[]>([initialTab]);
   const [activeTabId, setActiveTabId] = useState<string>(initialTab.id);
+  const [activeFolderPath, setActiveFolderPath] = useState<string>(initialTab.folderPath);
+  const folderLastActiveTabRef = useRef<Record<string, string>>({ [initialTab.folderPath]: initialTab.id });
 
   // --- File state (working copy of active tab) ---
   const [fileTree, setFileTree] = useState<FileEntry[]>([]);
@@ -554,6 +557,8 @@ function App() {
       const newTab = tabsRef.current.find((t) => t.id === tabId);
       if (!newTab) return;
       setActiveTabId(tabId);
+      setActiveFolderPath(newTab.folderPath);
+      folderLastActiveTabRef.current[newTab.folderPath] = tabId;
       setContent(newTab.content);
       setOriginalLines(newTab.originalLines);
       setDirty(newTab.dirty);
@@ -600,12 +605,13 @@ function App() {
     [saveCurrentToTab, reset]
   );
 
-  /** 新しい空タブを開く */
+  /** 新しい空タブを開く（現在のフォルダグループ内に作成） */
   const openNewTab = useCallback(() => {
     saveCurrentToTab();
-    const newTab = makeInitialTab();
+    const newTab = makeInitialTab(activeFolderPath);
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
+    folderLastActiveTabRef.current[activeFolderPath] = newTab.id;
     setContent("");
     setOriginalLines([]);
     setDirty(false);
@@ -615,7 +621,7 @@ function App() {
     setContentUndoAvailable(false);
     setContentRedoAvailable(false);
     reset([]);
-  }, [saveCurrentToTab, reset]);
+  }, [saveCurrentToTab, reset, activeFolderPath]);
 
   /** タブを閉じる */
   const closeTab = useCallback(
@@ -635,8 +641,14 @@ function App() {
       const remaining = latestTabs.filter((t) => t.id !== tabId);
 
       if (isActive && remaining.length > 0) {
+        // 同じフォルダ内のタブを優先、なければ別フォルダ
+        const closedTab = latestTabs.find((t) => t.id === tabId);
+        const closedFolder = closedTab?.folderPath ?? "";
+        const sameFolder = remaining.filter((t) => t.folderPath === closedFolder);
         const idx = latestTabs.findIndex((t) => t.id === tabId);
-        const newActive = remaining[Math.min(idx, remaining.length - 1)];
+        const newActive = sameFolder.length > 0
+          ? sameFolder[0]
+          : remaining[Math.min(idx, remaining.length - 1)];
         setContent(newActive.content);
         setOriginalLines(newActive.originalLines);
         setDirty(newActive.dirty);
@@ -647,8 +659,84 @@ function App() {
         setContentRedoAvailable(newActive.contentRedoStack.length > 0);
         reset(newActive.tables);
         setActiveTabId(newActive.id);
+        setActiveFolderPath(newActive.folderPath);
+        folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
       }
 
+      setTabs(remaining);
+    },
+    [reset, saveCurrentToTab]
+  );
+
+  /** フォルダタブを切り替える */
+  const switchToFolder = useCallback(
+    async (folder: string) => {
+      if (folder === activeFolderPath) return;
+      // そのフォルダ内で最後にアクティブだったタブに切り替える
+      const lastTabId = folderLastActiveTabRef.current[folder];
+      const folderTabs = tabsRef.current.filter((t) => t.folderPath === folder);
+      if (folderTabs.length === 0) return;
+      const targetTab = folderTabs.find((t) => t.id === lastTabId) ?? folderTabs[0];
+      switchToTab(targetTab.id);
+
+      // フォルダツリーを再読み込み
+      if (folder) {
+        try {
+          const entries: FileEntry[] = await invoke("get_file_tree", {
+            dirPath: folder,
+            includeDocx: filterDocx,
+            includeXls: filterXls,
+            includeKm: filterKm,
+          });
+          setFileTree(entries);
+          setFolderPath(folder);
+        } catch { /* ignore */ }
+      } else {
+        setFileTree([]);
+        setFolderPath(null);
+      }
+    },
+    [activeFolderPath, switchToTab, filterDocx, filterXls, filterKm]
+  );
+
+  /** フォルダタブを閉じる（フォルダ内の全タブを閉じる） */
+  const closeFolderTabs = useCallback(
+    (folder: string) => {
+      const currentTabs = tabsRef.current;
+      const folderTabs = currentTabs.filter((t) => t.folderPath === folder);
+      const remaining = currentTabs.filter((t) => t.folderPath !== folder);
+
+      // 全タブを閉じることはできない
+      if (remaining.length === 0) return;
+
+      // 未保存のタブがあれば確認
+      const dirtyTabs = folderTabs.filter((t) => t.dirty);
+      if (dirtyTabs.length > 0) {
+        const folderName = folder ? folder.split(/[\\/]/).pop() ?? folder : "新規";
+        if (!window.confirm(`"${folderName}" 内に未保存の変更があります。すべて閉じますか？`)) return;
+      }
+
+      // アクティブタブがこのフォルダ内にある場合、別フォルダに切り替え
+      const isActiveInFolder = folderTabs.some((t) => t.id === activeTabIdRef.current);
+      if (isActiveInFolder) {
+        saveCurrentToTab();
+        const newActive = remaining[0];
+        setContent(newActive.content);
+        setOriginalLines(newActive.originalLines);
+        setDirty(newActive.dirty);
+        setActiveFile(newActive.filePath);
+        undoStackRef.current = [...newActive.contentUndoStack];
+        redoStackRef.current = [...newActive.contentRedoStack];
+        setContentUndoAvailable(newActive.contentUndoStack.length > 0);
+        setContentRedoAvailable(newActive.contentRedoStack.length > 0);
+        reset(newActive.tables);
+        setActiveTabId(newActive.id);
+        setActiveFolderPath(newActive.folderPath);
+        folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
+      }
+
+      // フォルダの最後のアクティブタブ情報を削除
+      delete folderLastActiveTabRef.current[folder];
       setTabs(remaining);
     },
     [reset, saveCurrentToTab]
@@ -669,28 +757,8 @@ function App() {
 
   const loadFile = useCallback(
     async (filePath: string) => {
-      // ファイルの親フォルダをフォルダツリーで開く
-      const openParentFolder = async () => {
-        const sep = filePath.includes("\\") ? "\\" : "/";
-        const parts = filePath.split(sep);
-        parts.pop();
-        const parentDir = parts.join(sep);
-        if (!parentDir) return;
-        try {
-          const entries: FileEntry[] = await invoke("get_file_tree", {
-            dirPath: parentDir,
-            includeDocx: filterDocx,
-            includeXls: filterXls,
-            includeKm: filterKm,
-          });
-          setFileTree(entries);
-          setFolderPath(parentDir);
-          addRecentFolder(parentDir);
-        } catch { /* ignore */ }
-      };
-
-      // すでに開いているタブがあればそこに切り替える
-      const existing = tabsRef.current.find((t) => t.filePath === filePath);
+      // すでに同じフォルダコンテキストで開いているタブがあればそこに切り替える
+      const existing = tabsRef.current.find((t) => t.filePath === filePath && t.folderPath === activeFolderPath);
       if (existing) {
         switchToTab(existing.id);
         // Officeファイル/マインドマップの場合はデータを再設定
@@ -718,7 +786,6 @@ function App() {
           setMindmapFileData(null);
           setMindmapFileType(null);
         }
-        await openParentFolder();
         return;
       }
 
@@ -745,15 +812,17 @@ function App() {
             setTabs((prev) =>
               prev.map((t) =>
                 t.id === currentId
-                  ? { ...t, filePath, content: "", originalLines: [], tables: [], dirty: false }
+                  ? { ...t, filePath, folderPath: activeFolderPath, content: "", originalLines: [], tables: [], dirty: false }
                   : t
               )
             );
+            folderLastActiveTabRef.current[activeFolderPath] = currentId;
           } else {
             saveCurrentToTab();
             const newTab: Tab = {
               id: crypto.randomUUID(),
               filePath,
+              folderPath: activeFolderPath,
               content: "",
               originalLines: [],
               tables: [],
@@ -768,9 +837,9 @@ function App() {
             setDirty(false);
             setActiveFile(filePath);
             reset([]);
+            folderLastActiveTabRef.current[activeFolderPath] = newTab.id;
           }
           addRecentFile(filePath);
-          await openParentFolder();
           return;
         }
 
@@ -796,15 +865,17 @@ function App() {
             setTabs((prev) =>
               prev.map((t) =>
                 t.id === currentId
-                  ? { ...t, filePath, content: "", originalLines: [], tables: [], dirty: false }
+                  ? { ...t, filePath, folderPath: activeFolderPath, content: "", originalLines: [], tables: [], dirty: false }
                   : t
               )
             );
+            folderLastActiveTabRef.current[activeFolderPath] = currentId;
           } else {
             saveCurrentToTab();
             const newTab: Tab = {
               id: crypto.randomUUID(),
               filePath,
+              folderPath: activeFolderPath,
               content: "",
               originalLines: [],
               tables: [],
@@ -819,9 +890,9 @@ function App() {
             setDirty(false);
             setActiveFile(filePath);
             reset([]);
+            folderLastActiveTabRef.current[activeFolderPath] = newTab.id;
           }
           addRecentFile(filePath);
-          await openParentFolder();
           return;
         }
 
@@ -844,7 +915,6 @@ function App() {
         // 現タブが空（未編集・ファイル未割当）なら上書き、そうでなければ新タブで開く
         const currentTab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
         const isCurrentEmpty = currentTab && !currentTab.filePath && !currentTab.dirty && !currentTab.content;
-
         if (isCurrentEmpty) {
           // 空タブに上書き
           const currentId = activeTabIdRef.current;
@@ -864,6 +934,7 @@ function App() {
                 ? {
                     ...t,
                     filePath,
+                    folderPath: activeFolderPath,
                     content: text,
                     originalLines: doc.lines,
                     tables: structuredClone(doc.tables),
@@ -874,12 +945,14 @@ function App() {
                 : t
             )
           );
+          folderLastActiveTabRef.current[activeFolderPath] = currentId;
         } else {
           // 新タブで開く
           saveCurrentToTab();
           const newTab: Tab = {
             id: crypto.randomUUID(),
             filePath,
+            folderPath: activeFolderPath,
             content: text,
             originalLines: doc.lines,
             tables: structuredClone(doc.tables),
@@ -898,16 +971,16 @@ function App() {
           setContentUndoAvailable(false);
           setContentRedoAvailable(false);
           reset(doc.tables);
+          folderLastActiveTabRef.current[activeFolderPath] = newTab.id;
         }
 
         addRecentFile(filePath);
-        await openParentFolder();
       } catch (e) {
         console.error("ファイル読み込みエラー:", e);
         showToast("ファイル読み込みに失敗しました", true);
       }
     },
-    [reset, switchToTab, addRecentFile, saveCurrentToTab, filterDocx, filterXls, filterKm, addRecentFolder]
+    [reset, switchToTab, addRecentFile, saveCurrentToTab, activeFolderPath]
   );
 
   // --- Self-write guard for file watcher feedback loop prevention ---
@@ -981,6 +1054,54 @@ function App() {
     }
   }, [activeFile, reset]));
 
+  // --- フォルダを開いてタブを作成/切り替えする共通処理 ---
+  const openFolderAndActivateTab = useCallback((folderPath: string, entries: FileEntry[]) => {
+    setFileTree(entries);
+    setFolderPath(folderPath);
+    addRecentFolder(folderPath);
+
+    // 既存タブにそのフォルダがあれば切り替える
+    const existingTab = tabsRef.current.find((t) => t.folderPath === folderPath);
+    if (existingTab) {
+      switchToTab(existingTab.id);
+      return;
+    }
+
+    // 「新規」フォルダタブしかなく、未編集なら置き換える
+    const allEmpty = tabsRef.current.every((t) => t.folderPath === "");
+    const allClean = tabsRef.current.every((t) => !t.dirty && !t.filePath && t.content === "");
+    if (allEmpty && allClean) {
+      const replacedTab = tabsRef.current[0];
+      const updatedTab: Tab = { ...replacedTab, folderPath };
+      setTabs(tabsRef.current.map((t) => (t.id === replacedTab.id ? updatedTab : t)));
+      setActiveTabId(updatedTab.id);
+      setActiveFolderPath(folderPath);
+      folderLastActiveTabRef.current[folderPath] = updatedTab.id;
+      return;
+    }
+
+    // なければ新しいタブを作成
+    saveCurrentToTab();
+    const newTab = makeInitialTab(folderPath);
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+    setActiveFolderPath(folderPath);
+    folderLastActiveTabRef.current[folderPath] = newTab.id;
+    setContent("");
+    setOriginalLines([]);
+    setActiveFile(null);
+    setDirty(false);
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    setContentUndoAvailable(false);
+    setContentRedoAvailable(false);
+    reset([]);
+    setOfficeFileData(null);
+    setOfficeFileType(null);
+    setMindmapFileData(null);
+    setMindmapFileType(null);
+  }, [addRecentFolder, switchToTab, saveCurrentToTab, reset]);
+
   // --- Folder open ---
   const handleOpenFolder = useCallback(async () => {
     let selected: string | null = null;
@@ -999,13 +1120,11 @@ function App() {
         includeXls: filterXls,
         includeKm: filterKm,
       });
-      setFileTree(entries);
-      setFolderPath(selected);
-      addRecentFolder(selected);
+      openFolderAndActivateTab(selected, entries);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
     }
-  }, [filterDocx, filterXls, filterKm, addRecentFolder]);
+  }, [filterDocx, filterXls, filterKm, openFolderAndActivateTab]);
 
   // --- Open recent folder ---
   const handleOpenRecentFolder = useCallback(async (path: string) => {
@@ -1016,14 +1135,12 @@ function App() {
         includeXls: filterXls,
         includeKm: filterKm,
       });
-      setFileTree(entries);
-      setFolderPath(path);
-      addRecentFolder(path);
+      openFolderAndActivateTab(path, entries);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
       showToast("フォルダを開けませんでした", true);
     }
-  }, [filterDocx, filterXls, filterKm, addRecentFolder]);
+  }, [filterDocx, filterXls, filterKm, openFolderAndActivateTab]);
 
   // --- File open ---
   const handleOpenFile = useCallback(async () => {
@@ -2021,9 +2138,12 @@ function App() {
       <TabBar
         tabs={tabs}
         activeTabId={activeTabId}
+        activeFolderPath={activeFolderPath}
         onSelectTab={switchToTab}
         onCloseTab={closeTab}
         onNewTab={openNewTab}
+        onSelectFolder={switchToFolder}
+        onCloseFolder={closeFolderTabs}
       />
 
       {showSearch && (

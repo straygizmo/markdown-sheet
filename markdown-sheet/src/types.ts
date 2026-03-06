@@ -69,6 +69,7 @@ export interface AiSettings {
 export interface Tab {
   id: string;
   filePath: string | null;
+  folderPath: string;
   content: string;
   originalLines: string[];
   tables: MarkdownTable[];

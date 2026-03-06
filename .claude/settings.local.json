@@ -1,7 +1,23 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run tauri:*)"
+      "Bash(npm run tauri:*)",
+      "Bash(npm run build)",
+      "Bash(cargo check)",
+      "Bash(xargs grep:*)",
+      "Bash(mkdir:*)",
+      "Bash(grep:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(cargo build:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(npx vite:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(npx grunt:*)",
+      "Bash(node:*)"
     ]
   }
 }
