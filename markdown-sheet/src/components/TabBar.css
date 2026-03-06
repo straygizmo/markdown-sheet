@@ -49,10 +49,10 @@
 }
 
 .folder-tab-item.active {
-  background: var(--bg-base);
-  color: var(--text);
-  border-color: var(--border);
-  border-bottom-color: var(--bg-base);
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  border-bottom-color: var(--primary);
   font-weight: 600;
   position: relative;
   z-index: 1;
@@ -138,10 +138,10 @@
 }
 
 .tab-item.active {
-  background: var(--bg-base);
-  color: var(--text);
-  border-color: var(--border);
-  border-bottom-color: var(--bg-base);
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  border-bottom-color: var(--primary);
   font-weight: 500;
   position: relative;
   z-index: 1;
