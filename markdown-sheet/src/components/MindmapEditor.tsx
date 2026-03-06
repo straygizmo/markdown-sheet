@@ -568,6 +568,7 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const isUndoingRef = useRef(false);
+  const isAddingNodeRef = useRef(false);
   const initializedRef = useRef(false);
 
   // Inline text editing state
@@ -1050,7 +1051,9 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
 
     const handleChange = () => {
       if (!initializedRef.current || readOnly) return;
-      // Check if the selected node has empty text (just added by Enter/Tab)
+      // Skip if we're handling node addition from our keyboard handler
+      if (isAddingNodeRef.current) return;
+      // Check if the selected node has empty text (just added via context menu etc.)
       const selected = minder.getSelectedNode();
       if (selected && !selected.isRoot() && !selected.getText()) {
         const parent = selected.getParent();
@@ -1184,12 +1187,66 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
         }
       }
 
+      // Enter: add sibling topic
+      if (e.key === "Enter" && !e.shiftKey && !readOnly) {
+        const selected = minder.getSelectedNode();
+        if (selected && !selected.isRoot()) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          isAddingNodeRef.current = true;
+          pushSnapshot();
+          minder.execCommand("AppendSiblingNode");
+          const newNode = minder.getSelectedNode();
+          if (newNode && !newNode.getText()) {
+            const parent = newNode.getParent();
+            if (parent) {
+              const siblingCount = parent.getChildren().length;
+              newNode.setText(`サブトピック ${siblingCount}`);
+              minder.refresh();
+            }
+          }
+          markDirty();
+          isAddingNodeRef.current = false;
+          if (newNode) {
+            startEditNodeRef.current(newNode);
+          }
+        }
+      }
+
+      // Tab: add child topic
+      if (e.key === "Tab" && !readOnly) {
+        const selected = minder.getSelectedNode();
+        if (selected) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          isAddingNodeRef.current = true;
+          pushSnapshot();
+          minder.execCommand("AppendChildNode");
+          const newNode = minder.getSelectedNode();
+          if (newNode && !newNode.getText()) {
+            const parent = newNode.getParent();
+            if (parent) {
+              const childCount = parent.getChildren().length;
+              newNode.setText(`サブトピック ${childCount}`);
+              minder.refresh();
+            }
+          }
+          markDirty();
+          isAddingNodeRef.current = false;
+          if (newNode) {
+            startEditNodeRef.current(newNode);
+          }
+        }
+      }
+
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleUndo, handleRedo, startEditNode, handleSave]);
+  }, [handleUndo, handleRedo, startEditNode, handleSave, pushSnapshot, markDirty]);
 
   const handleDeleteNode = useCallback(() => {
     const minder = minderRef.current;
