@@ -13,15 +13,17 @@ function getSharpElbowPath(
   // Elbow: horizontal line → small rounded corner → vertical line → small rounded corner → horizontal line
   const midX = sourceX + (targetX - sourceX) * 0.5;
   const dy = targetY - sourceY;
-  const r = Math.min(8, Math.abs(dy) / 2, Math.abs(targetX - sourceX) * 0.25);
-  const sign = dy > 0 ? 1 : -1;
+  const dx = targetX - sourceX;
+  const r = Math.min(8, Math.abs(dy) / 2, Math.abs(dx) * 0.25);
+  const vSign = dy > 0 ? 1 : -1;
+  const hSign = dx > 0 ? 1 : -1;
 
   return [
     `M ${sourceX},${sourceY}`,
-    `L ${midX - r},${sourceY}`,
-    `Q ${midX},${sourceY} ${midX},${sourceY + sign * r}`,
-    `L ${midX},${targetY - sign * r}`,
-    `Q ${midX},${targetY} ${midX + r},${targetY}`,
+    `L ${midX - hSign * r},${sourceY}`,
+    `Q ${midX},${sourceY} ${midX},${sourceY + vSign * r}`,
+    `L ${midX},${targetY - vSign * r}`,
+    `Q ${midX},${targetY} ${midX + hSign * r},${targetY}`,
     `L ${targetX},${targetY}`,
   ].join(" ");
 }

@@ -683,8 +683,23 @@ function App() {
   useEffect(() => {
     if (!autoSave) return;
     const iv = setInterval(async () => {
-      if (dirtyRef.current && activeFile && !getMindmapExt(activeFile) && !getOfficeExt(activeFile)) {
-        try {
+      if (!dirtyRef.current || !activeFile) return;
+      if (getOfficeExt(activeFile)) return;
+      if (activeFile.toLowerCase().endsWith(".xmind")) return;
+      try {
+        if (getMindmapExt(activeFile)) {
+          const json = mindmapEditorRef.current?.getJson();
+          if (!json) return;
+          lastWriteRef.current = Date.now();
+          const jsonStr = JSON.stringify(json, null, 2);
+          await writeTextFile(activeFile, jsonStr);
+          setMindmapFileData(new TextEncoder().encode(jsonStr));
+          setDirty(false);
+          const currentId = activeTabIdRef.current;
+          setTabs((prev) =>
+            prev.map((t) => (t.id === currentId ? { ...t, dirty: false } : t))
+          );
+        } else {
           lastWriteRef.current = Date.now();
           await writeTextFile(activeFile, contentRef.current);
           setDirty(false);
@@ -692,9 +707,9 @@ function App() {
           setTabs((prev) =>
             prev.map((t) => (t.id === currentId ? { ...t, dirty: false } : t))
           );
-          showToast("自動保存しました");
-        } catch { /* silent */ }
-      }
+        }
+        showToast("自動保存しました");
+      } catch { /* silent */ }
     }, 30_000);
     return () => clearInterval(iv);
   }, [autoSave, activeFile, showToast]);
