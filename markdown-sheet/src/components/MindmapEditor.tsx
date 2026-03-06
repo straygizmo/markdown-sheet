@@ -270,7 +270,8 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
 
   // Note panel
-  const [notePanel, setNotePanel] = useState<{ nodeId: string; text: string } | null>(null);
+  const [notePanel, setNotePanel] = useState<{ nodeId: string; text: string; x: number; y: number } | null>(null);
+  const notePanelDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
 
   // Clipboard (app-internal, stores subtree without IDs)
   const clipboardRef = useRef<KityMinderNode | null>(null);
@@ -631,7 +632,23 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
     (nodeId: string) => {
       setContextMenu(null);
       const node = treeRef.current ? findNode(treeRef.current, nodeId) : null;
-      setNotePanel({ nodeId, text: node?.data.note || "" });
+      // Position near the node
+      const el = document.querySelector(`[data-id="${nodeId}"]`) as HTMLElement | null;
+      const container = el?.closest(".mindmap-container") as HTMLElement | null;
+      let x = 100, y = 100;
+      if (el && container) {
+        const rect = el.getBoundingClientRect();
+        const cRect = container.getBoundingClientRect();
+        x = rect.right - cRect.left + 12;
+        y = rect.top - cRect.top;
+        // Keep within container bounds
+        const panelW = 320, panelH = 220;
+        if (x + panelW > cRect.width) x = rect.left - cRect.left - panelW - 12;
+        if (x < 0) x = 12;
+        if (y + panelH > cRect.height) y = cRect.height - panelH - 12;
+        if (y < 0) y = 12;
+      }
+      setNotePanel({ nodeId, text: node?.data.note || "", x, y });
     },
     [],
   );
@@ -727,6 +744,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
   const handlePaneClick = useCallback(() => {
     if (editingNodeId) commitEdit();
     setContextMenu(null);
+    setNotePanel(null);
   }, [editingNodeId, commitEdit]);
 
   const handleSelectionChange = useCallback(
@@ -924,6 +942,56 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
             />
           );
         })()}
+
+        {/* Floating note panel */}
+        {notePanel && (
+          <div
+            className="km-note-panel-float"
+            style={{ left: notePanel.x, top: notePanel.y }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div
+              className="km-note-panel-header"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                notePanelDragRef.current = {
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  origX: notePanel.x,
+                  origY: notePanel.y,
+                };
+                const onMove = (ev: MouseEvent) => {
+                  const d = notePanelDragRef.current;
+                  if (!d) return;
+                  setNotePanel((prev) =>
+                    prev ? { ...prev, x: d.origX + ev.clientX - d.startX, y: d.origY + ev.clientY - d.startY } : null,
+                  );
+                };
+                const onUp = () => {
+                  notePanelDragRef.current = null;
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                };
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+              }}
+            >
+              <span>ノート (Markdown)</span>
+              <button onClick={() => setNotePanel(null)} title="閉じる">&times;</button>
+            </div>
+            <textarea
+              value={notePanel.text}
+              onChange={(e) => handleNoteChange(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Escape") setNotePanel(null);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              placeholder="マークダウンテキストを入力..."
+            />
+          </div>
+        )}
       </div>
 
       {/* Context menu */}
@@ -966,25 +1034,6 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
         />
       )}
 
-      {/* Note panel */}
-      {notePanel && (
-        <div className="km-note-panel">
-          <div className="km-note-panel-header">
-            <span>ノート (Markdown)</span>
-            <button onClick={() => setNotePanel(null)} title="閉じる">&times;</button>
-          </div>
-          <textarea
-            value={notePanel.text}
-            onChange={(e) => handleNoteChange(e.target.value)}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Escape") setNotePanel(null);
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            placeholder="マークダウンテキストを入力..."
-          />
-        </div>
-      )}
     </div>
   );
 }
