@@ -240,6 +240,21 @@ pub struct GitFileStatus {
     pub path: String,
 }
 
+/// git init
+#[tauri::command]
+pub fn git_init(dir_path: String) -> Result<(), String> {
+    let output = Command::new("git")
+        .args(["init"])
+        .current_dir(&dir_path)
+        .output()
+        .map_err(|e| format!("git init 失敗: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(())
+}
+
 /// git status --porcelain の結果を返す
 #[tauri::command]
 pub fn git_status(dir_path: String) -> Result<Vec<GitFileStatus>, String> {

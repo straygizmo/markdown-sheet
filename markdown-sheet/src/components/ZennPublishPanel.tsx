@@ -19,15 +19,22 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
   const [commitMessage, setCommitMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [notGitRepo, setNotGitRepo] = useState(false);
 
   const fetchGitStatus = useCallback(async () => {
     setStatusLoading(true);
     try {
       const result = await invoke<GitFileStatus[]>("git_status", { dirPath: folderPath });
       setGitStatus(result);
+      setNotGitRepo(false);
     } catch (e) {
       setGitStatus([]);
-      showToast(`Git status 取得失敗: ${e}`, true);
+      const msg = String(e);
+      if (msg.includes("not a git repository")) {
+        setNotGitRepo(true);
+      } else {
+        showToast(`Git status 取得失敗: ${e}`, true);
+      }
     } finally {
       setStatusLoading(false);
     }
@@ -59,6 +66,41 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
       setLoading(false);
     }
   }, [folderPath, commitMessage, showToast, onRefreshFileTree, onRefreshZenn, fetchGitStatus]);
+
+  const handleGitInit = useCallback(async () => {
+    setLoading(true);
+    try {
+      await invoke("git_init", { dirPath: folderPath });
+      showToast("Git リポジトリを初期化しました");
+      setNotGitRepo(false);
+      await fetchGitStatus();
+    } catch (e) {
+      showToast(`git init 失敗: ${e}`, true);
+    } finally {
+      setLoading(false);
+    }
+  }, [folderPath, showToast, fetchGitStatus]);
+
+  if (notGitRepo) {
+    return (
+      <div className="zenn-publish">
+        <div className="zenn-publish-header">
+          <span>Zenn デプロイ (Git)</span>
+        </div>
+        <div className="zenn-publish-empty">Git リポジトリではありません</div>
+        <div className="zenn-publish-actions">
+          <button
+            className="zenn-publish-btn"
+            onClick={handleGitInit}
+            disabled={loading}
+            style={{ flex: 1 }}
+          >
+            {loading ? "初期化中..." : "git init"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="zenn-publish">
