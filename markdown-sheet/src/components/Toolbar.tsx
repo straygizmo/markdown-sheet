@@ -87,7 +87,7 @@ const Toolbar: FC<Props> = ({
         {/* ===== 入力グループ ===== */}
         <span className="toolbar-group-label">入力</span>
         <button onClick={onOpenFolder} title="フォルダを開く">
-          <span className="icon">&#128193;</span> フォルダ
+          <span className="icon">&#128194;</span> 開く
         </button>
         <div className="toolbar-dropdown-wrap" ref={folderDropdownRef}>
           <button
@@ -154,7 +154,7 @@ const Toolbar: FC<Props> = ({
           )}
         </div>
         <button onClick={onPasteFromClipboard} title="クリップボードのテキストを貼り付け">
-          <span className="icon">&#128203;</span> クリップボード
+          <span className="icon">&#128203;</span>
         </button>
 
         <div className="toolbar-separator" />
@@ -165,7 +165,7 @@ const Toolbar: FC<Props> = ({
           <span className="icon">&#128190;</span> 保存
         </button>
         <button onClick={onSaveAs} title="別名で保存">
-          名前を付けて保存
+          💾✏
         </button>
 
         <div className="toolbar-separator" />
@@ -198,7 +198,7 @@ const Toolbar: FC<Props> = ({
               onClick={onToggleTerminal}
               title={`ターミナルを${terminalVisible ? "非表示" : "表示"} (Ctrl+\`)`}
             >
-              {terminalVisible ? "ターミナル ▶" : "ターミナル ◀"}
+              {terminalVisible ? "💻 ▶" : "💻 ◀"}
             </button>
 
             <div className="toolbar-separator" />
