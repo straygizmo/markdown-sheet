@@ -311,6 +311,22 @@ function showNoteEditor(
   requestAnimationFrame(() => textarea.focus());
 }
 
+/** Find the minder node at the given screen point by tracing the DOM element
+ *  back through kity's shape hierarchy, mirroring kityminder's getTargetNode(). */
+function findNodeAtPoint(x: number, y: number): MinderNodeInstance | null {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  // kity attaches a .shape reference on SVG DOM elements
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let shape = (el as any).shape as any;
+  if (!shape) return null;
+  // Walk up the kity shape container chain to find the minderNode
+  while (shape && !shape.minderNode) {
+    shape = shape.container;
+  }
+  return (shape?.minderNode as MinderNodeInstance) ?? null;
+}
+
 /** Build the context menu DOM tree (pure DOM, no React state) */
 function buildContextMenu(
   minder: MinderInstance,
@@ -945,20 +961,31 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
       }
     };
 
-    const handleGlobalMouseDown = (e: MouseEvent) => {
-      const menu = contextMenuRef.current;
-      if (menu && !menu.contains(e.target as Node)) {
-        closeMenu();
+    // Right-click context menu: use mousedown (button===2) on window capture
+    // to reliably intercept before kityminder or Tauri handles it.
+    const handleMouseDown = (e: MouseEvent) => {
+      // Left/middle click: close any open menu
+      if (e.button !== 2) {
+        const menu = contextMenuRef.current;
+        if (menu && !menu.contains(e.target as Node)) {
+          closeMenu();
+        }
+        return;
       }
-    };
 
-    const handleContextMenuNative = (e: MouseEvent) => {
-      e.preventDefault();
+      // Right-click: only handle inside the mindmap container
+      if (!containerEl.contains(e.target as Node)) return;
       if (readOnly) return;
-      const selected = minder.getSelectedNode();
-      if (!selected) return;
 
-      // Remove previous menu if any
+      // Find the node at the click position using kity's shape→minderNode chain
+      const found = findNodeAtPoint(e.clientX, e.clientY);
+      if (!found) return; // No node at click position → don't show menu
+      minder.select([found], true);
+
+      // Prevent kityminder from also processing this right-click
+      e.stopPropagation();
+      e.preventDefault();
+
       closeMenu();
 
       const menu = buildContextMenu(minder, pushSnapshot, closeMenu, markDirty);
@@ -967,9 +994,11 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
       document.body.appendChild(menu);
       contextMenuRef.current = menu;
     };
+    window.addEventListener("mousedown", handleMouseDown, true);
 
-    containerEl.addEventListener("contextmenu", handleContextMenuNative, true);
-    document.addEventListener("mousedown", handleGlobalMouseDown, true);
+    // Prevent browser/Tauri default context menu on the container
+    const handlePreventContextMenu = (e: Event) => e.preventDefault();
+    containerEl.addEventListener("contextmenu", handlePreventContextMenu);
 
     // Save viewport state on every view change (pan/zoom) so the cache is always up-to-date.
     // This is more reliable than saving on unmount, since React may detach DOM before cleanup.
@@ -997,8 +1026,8 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
       minder.off("editnoterequest", handleEditNote);
       hideNoteTooltip();
       containerEl.removeEventListener("dblclick", handleDomDblClick);
-      containerEl.removeEventListener("contextmenu", handleContextMenuNative, true);
-      document.removeEventListener("mousedown", handleGlobalMouseDown, true);
+      window.removeEventListener("mousedown", handleMouseDown, true);
+      containerEl.removeEventListener("contextmenu", handlePreventContextMenu);
       if (readOnly) {
         containerEl.removeEventListener("keydown", handleReadOnlyBlock, true);
         window.removeEventListener("keydown", handleReadOnlyBlock, true);
@@ -1027,11 +1056,8 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
         const parent = selected.getParent();
         if (parent) {
           const siblingCount = parent.getChildren().length;
-          selected.setText(`サブトピック ${siblingCount}`);
-          // Re-render the node to reflect the text change
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (selected as any).render?.();
-          minder.layout(0);
+          // Use execCommand to set text so kityminder properly renders and lays out
+          minder.execCommand("text", `サブトピック ${siblingCount}`);
         }
       }
       pushSnapshot();
