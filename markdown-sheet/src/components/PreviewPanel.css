@@ -44,15 +44,17 @@
   font-size: 11px;
   border: 1px solid var(--border);
   border-radius: 3px;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--bg-surface);
+  color: var(--toolbar-text, var(--text));
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 
 .preview-export-group button:hover {
-  background: var(--bg-hover);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
 }
 
 .preview-convert-bar {
