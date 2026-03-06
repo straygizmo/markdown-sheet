@@ -22,10 +22,6 @@ interface Props {
   onRedo: () => void;
   onToggleSearch: () => void;
   onToggleTheme: () => void;
-  onExportPdf: () => void;
-  onExportHtml: () => void;
-  onExportDocx: () => void;
-  onCopyRichText: () => void;
   onPasteFromClipboard: () => void;
   onToggleEditor: () => void;
   onToggleTerminal: () => void;
@@ -52,10 +48,6 @@ const Toolbar: FC<Props> = ({
   onRedo,
   onToggleSearch,
   onToggleTheme,
-  onExportPdf,
-  onExportHtml,
-  onExportDocx,
-  onCopyRichText,
   onPasteFromClipboard,
   onToggleEditor,
   onToggleTerminal,
@@ -199,23 +191,6 @@ const Toolbar: FC<Props> = ({
               title={`ターミナルを${terminalVisible ? "非表示" : "表示"} (Ctrl+\`)`}
             >
               {terminalVisible ? "💻 ▶" : "💻 ◀"}
-            </button>
-
-            <div className="toolbar-separator" />
-
-            {/* ===== 出力グループ ===== */}
-            <span className="toolbar-group-label">出力</span>
-            <button onClick={onCopyRichText} title="書式付きでコピー (PPT/Excel向け)">
-              書式コピー
-            </button>
-            <button onClick={onExportPdf} title="PDFとしてエクスポート">
-              PDF
-            </button>
-            <button onClick={onExportHtml} title="HTMLとしてエクスポート">
-              HTML
-            </button>
-            <button onClick={onExportDocx} title="DOCXとしてエクスポート">
-              DOCX
             </button>
           </>
         )}

@@ -2207,10 +2207,6 @@ function App() {
         onRedo={handleRedo}
         onToggleSearch={() => setShowSearch((s) => !s)}
         onToggleTheme={toggleTheme}
-        onExportPdf={handleExportPdf}
-        onExportHtml={handleExportHtml}
-        onExportDocx={handleExportDocx}
-        onCopyRichText={handleCopyRichText}
         onPasteFromClipboard={handlePasteFromClipboard}
         terminalVisible={terminalVisible}
         onToggleEditor={() => setEditorVisible((v) => !v)}
@@ -2496,6 +2492,10 @@ function App() {
                 onRefreshFileTree={refreshFileTree}
                 activeViewTab={activeViewTab}
                 onViewTabChange={handleViewTabChange}
+                onExportPdf={handleExportPdf}
+                onExportHtml={handleExportHtml}
+                onExportDocx={handleExportDocx}
+                onCopyRichText={handleCopyRichText}
               />
             ) : (
               <div className="preview-panel-wrapper">

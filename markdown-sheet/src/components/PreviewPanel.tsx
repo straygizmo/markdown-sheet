@@ -18,6 +18,10 @@ interface Props {
   onRefreshFileTree?: () => void;
   activeViewTab?: "preview" | "table";
   onViewTabChange?: (tab: "preview" | "table") => void;
+  onExportPdf?: () => void;
+  onExportHtml?: () => void;
+  onExportDocx?: () => void;
+  onCopyRichText?: () => void;
 }
 
 export default function PreviewPanel({
@@ -33,6 +37,10 @@ export default function PreviewPanel({
   onRefreshFileTree,
   activeViewTab,
   onViewTabChange,
+  onExportPdf,
+  onExportHtml,
+  onExportDocx,
+  onCopyRichText,
 }: Props) {
   const [converting, setConverting] = useState(false);
 
@@ -73,6 +81,31 @@ export default function PreviewPanel({
           </>
         ) : (
           <span>プレビュー</span>
+        )}
+        {(onExportPdf || onExportHtml || onExportDocx || onCopyRichText) && (
+          <div className="preview-export-group">
+            <span className="preview-export-label">出力</span>
+            {onCopyRichText && (
+              <button onClick={onCopyRichText} title="書式付きでコピー (PPT/Excel向け)">
+                書式コピー
+              </button>
+            )}
+            {onExportPdf && (
+              <button onClick={onExportPdf} title="PDFとしてエクスポート">
+                PDF
+              </button>
+            )}
+            {onExportHtml && (
+              <button onClick={onExportHtml} title="HTMLとしてエクスポート">
+                HTML
+              </button>
+            )}
+            {onExportDocx && (
+              <button onClick={onExportDocx} title="DOCXとしてエクスポート">
+                DOCX
+              </button>
+            )}
+          </div>
         )}
       </div>
       {isOffice && isDocx && (

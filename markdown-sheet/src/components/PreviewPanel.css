@@ -24,6 +24,37 @@
   padding: 6px 4px;
 }
 
+.preview-export-group {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.preview-export-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-right: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.preview-export-group button {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.preview-export-group button:hover {
+  background: var(--bg-hover);
+}
+
 .preview-convert-bar {
   display: flex;
   align-items: center;
