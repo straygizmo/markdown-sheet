@@ -11,6 +11,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  type Edge,
   type Node,
   type Viewport,
 } from "@xyflow/react";
@@ -245,7 +246,7 @@ interface InnerProps extends Props {
 
 function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDirtyChange, editorRef }: InnerProps) {
   const readOnly = fileType === ".xmind";
-  const { fitView, setViewport } = useReactFlow();
+  const { fitView, setViewport, getNodes } = useReactFlow();
 
   // Core state
   const [tree, setTree] = useState<MindmapInternalNode | null>(null);
@@ -272,6 +273,11 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
   // Note panel
   const [notePanel, setNotePanel] = useState<{ nodeId: string; text: string; x: number; y: number } | null>(null);
   const notePanelDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  // Drag-to-reparent state
+  const dragRef = useRef<{ draggedId: string; currentDropTarget: string | null } | null>(null);
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   // Clipboard (app-internal, stores subtree without IDs)
   const clipboardRef = useRef<KityMinderNode | null>(null);
@@ -342,8 +348,48 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
 
   // Add editing overlay data to nodes
   const displayNodes = useMemo(() => {
-    return nodes.map((n) => ({ ...n, selected: selectedNodeIds.has(n.id) }));
-  }, [nodes, selectedNodeIds]);
+    return nodes.map((n) => ({
+      ...n,
+      selected: selectedNodeIds.has(n.id),
+      draggable: !readOnly && !(n.data as Record<string, unknown>).isRoot,
+      data: { ...n.data, isDropTarget: n.id === dropTargetId },
+    }));
+  }, [nodes, selectedNodeIds, readOnly, dropTargetId]);
+
+  // Preview edge for drag-to-reparent
+  const displayEdges = useMemo(() => {
+    if (!dropTargetId || !draggedNodeId) return edges;
+    let sourceHandle: string;
+    let targetHandle: string;
+    if (currentLayout === "bottom") {
+      sourceHandle = "source-bottom";
+      targetHandle = "target-top";
+    } else if (currentLayout === "filetree") {
+      sourceHandle = "source-bottom";
+      targetHandle = "target-left";
+    } else {
+      const targetNode = nodes.find((n) => n.id === dropTargetId);
+      const dir = (targetNode?.data as Record<string, unknown>)?.direction as string;
+      if (dir === "left") {
+        sourceHandle = "source-left";
+        targetHandle = "target-right";
+      } else {
+        sourceHandle = "source-right";
+        targetHandle = "target-left";
+      }
+    }
+    const previewEdge: Edge = {
+      id: "preview-drop-edge",
+      source: dropTargetId,
+      target: draggedNodeId,
+      sourceHandle,
+      targetHandle,
+      type: "mindmap",
+      data: { color: "#1976d2", depth: 1 } as unknown as Record<string, unknown>,
+      style: { strokeDasharray: "6 3" },
+    };
+    return [...edges, previewEdge];
+  }, [edges, dropTargetId, draggedNodeId, currentLayout, nodes]);
 
   // Load data
   useEffect(() => {
@@ -761,6 +807,85 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
     [filePath],
   );
 
+  // --- Drag-to-reparent ---
+
+  const handleNodeDragStart = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (readOnly || !treeRef.current) return;
+      if (node.id === treeRef.current.id) return;
+      if (editingNodeId) return;
+      if (selectedNodeIds.size > 1) return;
+      dragRef.current = { draggedId: node.id, currentDropTarget: null };
+      setDraggedNodeId(node.id);
+    },
+    [readOnly, editingNodeId, selectedNodeIds.size],
+  );
+
+  const handleNodeDrag = useCallback(
+    (_: React.MouseEvent, draggedNode: Node) => {
+      if (!dragRef.current || !treeRef.current) return;
+      const { draggedId } = dragRef.current;
+      const allNodes = getNodes();
+      const dw = draggedNode.measured?.width ?? 100;
+      const dh = draggedNode.measured?.height ?? 30;
+      const dragCx = draggedNode.position.x + dw / 2;
+      const dragCy = draggedNode.position.y + dh / 2;
+
+      let closestId: string | null = null;
+      let closestDist = Infinity;
+      const THRESHOLD = 100;
+      const draggedSubtree = findNode(treeRef.current, draggedId);
+
+      for (const n of allNodes) {
+        if (n.id === draggedId) continue;
+        if (draggedSubtree && findNode(draggedSubtree, n.id)) continue;
+        const nw = n.measured?.width ?? 100;
+        const nh = n.measured?.height ?? 30;
+        const cx = n.position.x + nw / 2;
+        const cy = n.position.y + nh / 2;
+        const dist = Math.sqrt((cx - dragCx) ** 2 + (cy - dragCy) ** 2);
+        if (dist < closestDist && dist < THRESHOLD) {
+          closestDist = dist;
+          closestId = n.id;
+        }
+      }
+
+      if (closestId !== dragRef.current.currentDropTarget) {
+        dragRef.current.currentDropTarget = closestId;
+        setDropTargetId(closestId);
+      }
+    },
+    [getNodes],
+  );
+
+  const handleNodeDragStop = useCallback(
+    (_: React.MouseEvent, _node: Node) => {
+      const dragData = dragRef.current;
+      dragRef.current = null;
+      setDraggedNodeId(null);
+      setDropTargetId(null);
+
+      if (!dragData || !dragData.currentDropTarget || !treeRef.current) return;
+      const { draggedId, currentDropTarget: targetId } = dragData;
+
+      pushSnapshot();
+      const clone = cloneTree(treeRef.current);
+      const parentResult = findParent(clone, draggedId);
+      if (!parentResult) return;
+      const draggedSubtree = parentResult.parent.children.splice(parentResult.index, 1)[0];
+      const newParent = findNode(clone, targetId);
+      if (!newParent) return;
+      if (newParent.data.expandState === "collapse") {
+        newParent.data.expandState = "expand";
+      }
+      newParent.children.push(draggedSubtree);
+      setTree(clone);
+      markDirty();
+      selectNode(draggedId);
+    },
+    [pushSnapshot, markDirty, selectNode],
+  );
+
   // --- Keyboard shortcuts ---
 
   useEffect(() => {
@@ -904,7 +1029,7 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
       <div className="mindmap-container">
         <ReactFlow
           nodes={displayNodes}
-          edges={edges}
+          edges={displayEdges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodeClick={handleNodeClick}
@@ -913,7 +1038,9 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
           onPaneClick={handlePaneClick}
           onSelectionChange={handleSelectionChange}
           onMoveEnd={handleMoveEnd}
-          nodesDraggable={false}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDrag={handleNodeDrag}
+          onNodeDragStop={handleNodeDragStop}
           nodesConnectable={false}
           selectionOnDrag
           panOnDrag={[2]}

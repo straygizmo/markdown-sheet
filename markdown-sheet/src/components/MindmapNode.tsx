@@ -5,8 +5,8 @@ import type { MindmapNodeData } from "../lib/mindmapLayout";
 const PROGRESS_LABELS = ["", "0%", "13%", "25%", "38%", "50%", "63%", "75%", "88%", "100%"];
 
 function MindmapNode({ id, data, selected }: NodeProps) {
-  const d = data as unknown as MindmapNodeData;
-  const { label, depth, direction, themeColors, priority, progress, hyperlink, note, image, imageSize } = d;
+  const d = data as unknown as MindmapNodeData & { isDropTarget?: boolean };
+  const { label, depth, direction, themeColors, priority, progress, hyperlink, note, image, imageSize, isDropTarget } = d;
 
   const style = depth === 0 ? themeColors.root : depth === 1 ? themeColors.main : themeColors.sub;
   const depthClass = `mm-d${Math.min(depth, 2)}`;
@@ -28,7 +28,7 @@ function MindmapNode({ id, data, selected }: NodeProps) {
 
   return (
     <div
-      className={`mm-node ${depthClass} ${selected ? "mm-selected" : ""}`}
+      className={`mm-node ${depthClass} ${selected ? "mm-selected" : ""} ${isDropTarget ? "mm-drop-target" : ""}`}
       style={{ background: style.bg, color: style.color, borderColor: style.border }}
     >
       {/* Markers */}
