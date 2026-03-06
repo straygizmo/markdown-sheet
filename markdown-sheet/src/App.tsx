@@ -1235,6 +1235,7 @@ function App() {
           if (event.payload.type !== "drop") return;
           const paths = event.payload.paths;
           if (!paths || paths.length === 0) return;
+          const dropPosition = (event.payload as { position?: { x: number; y: number } }).position;
 
           const mdExtensions = [".md", ".markdown", ".txt"];
           const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp"];
@@ -1253,7 +1254,55 @@ function App() {
                 const assetUrl = convertFileSrc(filePath);
                 const altText = filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "image";
                 const insertText = `![${altText}](${assetUrl})`;
-                const pos = textarea.selectionStart;
+
+                // Determine insert position from drop coordinates
+                let pos = textarea.selectionStart;
+                if (dropPosition) {
+                  const el = document.elementFromPoint(dropPosition.x, dropPosition.y);
+                  if (el === textarea) {
+                    // Create a temporary collapsed range at the drop point to find the text offset
+                    const range = document.caretRangeFromPoint(dropPosition.x, dropPosition.y);
+                    if (range) {
+                      // For textarea, calculate offset by using a hidden mirror approach
+                      // caretRangeFromPoint doesn't work directly on textarea content,
+                      // so we use the textarea's own coordinate-based calculation
+                      const rect = textarea.getBoundingClientRect();
+                      const style = window.getComputedStyle(textarea);
+                      const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+                      const paddingTop = parseFloat(style.paddingTop);
+                      const paddingLeft = parseFloat(style.paddingLeft);
+                      const relX = dropPosition.x - rect.left - paddingLeft;
+                      const relY = dropPosition.y - rect.top - paddingTop + textarea.scrollTop;
+
+                      const lines = contentRef.current.split("\n");
+                      const targetLineIndex = Math.min(Math.floor(relY / lineHeight), lines.length - 1);
+
+                      // Measure character width using canvas
+                      const canvas = document.createElement("canvas");
+                      const ctx = canvas.getContext("2d");
+                      if (ctx && targetLineIndex >= 0) {
+                        ctx.font = `${style.fontSize} ${style.fontFamily}`;
+                        const line = lines[targetLineIndex];
+                        let charIndex = line.length;
+                        for (let i = 0; i <= line.length; i++) {
+                          const w = ctx.measureText(line.substring(0, i)).width;
+                          if (w >= relX) {
+                            charIndex = i > 0 && (w - relX) > (relX - ctx.measureText(line.substring(0, i - 1)).width) ? i - 1 : i;
+                            break;
+                          }
+                        }
+                        // Convert line + charIndex to absolute position
+                        let absPos = 0;
+                        for (let i = 0; i < targetLineIndex; i++) {
+                          absPos += lines[i].length + 1; // +1 for \n
+                        }
+                        absPos += charIndex;
+                        pos = Math.min(absPos, contentRef.current.length);
+                      }
+                    }
+                  }
+                }
+
                 const newContent =
                   contentRef.current.substring(0, pos) +
                   insertText +
