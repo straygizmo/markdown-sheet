@@ -333,6 +333,8 @@ function buildContextMenu(
   pushSnapshot: () => void,
   closeMenu: () => void,
   markDirty: () => void,
+  onInsertSibling: () => void,
+  onInsertChild: () => void,
 ): HTMLDivElement {
   const menu = document.createElement("div");
   menu.className = "km-context-menu";
@@ -387,8 +389,8 @@ function buildContextMenu(
   const insertItem = makeSubmenuItem("挿入", () => {
     const sub = document.createElement("div");
     sub.className = "km-context-submenu";
-    sub.appendChild(makeItem("トピック", () => execAndClose("AppendSiblingNode")));
-    sub.appendChild(makeItem("サブトピック", () => execAndClose("AppendChildNode")));
+    sub.appendChild(makeItem("トピック", () => { closeMenu(); onInsertSibling(); }));
+    sub.appendChild(makeItem("サブトピック", () => { closeMenu(); onInsertChild(); }));
     return sub;
   });
 
@@ -989,7 +991,30 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
 
       closeMenu();
 
-      const menu = buildContextMenu(minder, pushSnapshot, closeMenu, markDirty);
+      const insertNode = (cmd: string) => {
+        isAddingNodeRef.current = true;
+        pushSnapshot();
+        minder.execCommand(cmd);
+        const newNode = minder.getSelectedNode();
+        if (newNode && !newNode.getText()) {
+          const parent = newNode.getParent();
+          if (parent) {
+            const count = parent.getChildren().length;
+            newNode.setText(`サブトピック ${count}`);
+          }
+        }
+        minder.layout(0);
+        markDirty();
+        isAddingNodeRef.current = false;
+        if (newNode) {
+          startEditNodeRef.current(newNode);
+        }
+      };
+      const menu = buildContextMenu(
+        minder, pushSnapshot, closeMenu, markDirty,
+        () => insertNode("AppendSiblingNode"),
+        () => insertNode("AppendChildNode"),
+      );
       menu.style.left = `${e.clientX}px`;
       menu.style.top = `${e.clientY}px`;
       document.body.appendChild(menu);
@@ -1203,9 +1228,9 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
             if (parent) {
               const siblingCount = parent.getChildren().length;
               newNode.setText(`サブトピック ${siblingCount}`);
-              minder.refresh();
             }
           }
+          minder.layout(0);
           markDirty();
           isAddingNodeRef.current = false;
           if (newNode) {
@@ -1230,9 +1255,9 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
             if (parent) {
               const childCount = parent.getChildren().length;
               newNode.setText(`サブトピック ${childCount}`);
-              minder.refresh();
             }
           }
+          minder.layout(0);
           markDirty();
           isAddingNodeRef.current = false;
           if (newNode) {
