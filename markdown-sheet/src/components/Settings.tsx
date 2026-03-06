@@ -24,6 +24,7 @@ interface FilterVisibility {
   showXls: boolean;
   showKm: boolean;
   showImages: boolean;
+  showZenn: boolean;
 }
 
 interface Props {
@@ -252,6 +253,18 @@ const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSa
               type="checkbox"
               checked={localFilter.showKm}
               onChange={(e) => setLocalFilter((s) => ({ ...s, showKm: e.target.checked }))}
+            />
+          </label>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section-title">Zenn</div>
+          <label className="settings-toggle-row">
+            <span>Zenn ボタンを表示</span>
+            <input
+              type="checkbox"
+              checked={localFilter.showZenn}
+              onChange={(e) => setLocalFilter((s) => ({ ...s, showZenn: e.target.checked }))}
             />
           </label>
         </div>

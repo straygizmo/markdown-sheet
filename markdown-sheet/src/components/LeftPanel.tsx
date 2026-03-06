@@ -29,6 +29,9 @@ interface LeftPanelProps {
   folderPath?: string | null;
   showToast?: (message: string, isError?: boolean) => void;
   onRefreshZenn?: () => void;
+  showZennBtn?: boolean;
+  onInitZenn?: () => void;
+  onToggleZennMode?: () => void;
   // OutlinePanel
   content: string;
   onHeadingClick: (headingId: string) => void;
@@ -59,6 +62,9 @@ export default function LeftPanel({
   folderPath,
   showToast,
   onRefreshZenn,
+  showZennBtn,
+  onInitZenn,
+  onToggleZennMode,
   content,
   onHeadingClick,
 }: LeftPanelProps) {
@@ -99,6 +105,9 @@ export default function LeftPanel({
           onImageDragStart={onImageDragStart}
           isZennMode={isZennMode}
           zennArticlesMeta={zennArticlesMeta}
+          showZennBtn={showZennBtn}
+          onInitZenn={onInitZenn}
+          onToggleZennMode={onToggleZennMode}
         />
       ) : (
         <OutlinePanel content={content} onHeadingClick={onHeadingClick} />

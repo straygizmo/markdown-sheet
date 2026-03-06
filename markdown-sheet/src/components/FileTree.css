@@ -180,6 +180,17 @@
   font-size: 12px;
 }
 
+/* ========== Zenn 初期化ボタン ========== */
+.zenn-init-btn {
+  color: #3ea8ff !important;
+  font-weight: 600;
+}
+.zenn-init-btn.active {
+  background: #3ea8ff !important;
+  color: white !important;
+  border-color: #3ea8ff !important;
+}
+
 /* ========== Zenn ファイルツリー ========== */
 .zenn-file-emoji {
   font-size: 13px;

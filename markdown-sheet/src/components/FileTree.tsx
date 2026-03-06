@@ -22,6 +22,9 @@ interface Props {
   onImageDragStart?: (path: string) => void;
   isZennMode?: boolean;
   zennArticlesMeta?: Record<string, ZennArticleMeta>;
+  showZennBtn?: boolean;
+  onInitZenn?: () => void;
+  onToggleZennMode?: () => void;
 }
 
 function getFileIcon(name: string): string {
@@ -125,6 +128,9 @@ const FileTree: FC<Props> = ({
   onImageDragStart,
   isZennMode = false,
   zennArticlesMeta,
+  showZennBtn = false,
+  onInitZenn,
+  onToggleZennMode,
 }) => {
   return (
     <>
@@ -178,6 +184,15 @@ const FileTree: FC<Props> = ({
             title=".km/.xmind 表示切替"
           >
             .km/.xmind
+          </button>
+        )}
+        {showZennBtn && (
+          <button
+            className={`file-tree-filter-btn zenn-init-btn ${isZennMode ? "active" : ""}`}
+            onClick={isZennMode ? onToggleZennMode : onInitZenn}
+            title={isZennMode ? "Zenn モード ON/OFF" : "Zenn プロジェクトとして初期化"}
+          >
+            Zenn
           </button>
         )}
       </div>

@@ -33,16 +33,21 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
   const [showImagesBtn, setShowImagesBtn] = useState(
     () => localStorage.getItem("md-show-images-btn") === "true"
   );
+  const [showZennBtn, setShowZennBtn] = useState(
+    () => localStorage.getItem("md-show-zenn-btn") === "true"
+  );
 
-  const handleSaveFilterVisibility = useCallback((v: { showDocx: boolean; showXls: boolean; showKm: boolean; showImages: boolean }) => {
+  const handleSaveFilterVisibility = useCallback((v: { showDocx: boolean; showXls: boolean; showKm: boolean; showImages: boolean; showZenn: boolean }) => {
     setShowDocxBtn(v.showDocx);
     setShowXlsBtn(v.showXls);
     setShowKmBtn(v.showKm);
     setShowImagesBtn(v.showImages);
+    setShowZennBtn(v.showZenn);
     localStorage.setItem("md-show-docx-btn", String(v.showDocx));
     localStorage.setItem("md-show-xls-btn", String(v.showXls));
     localStorage.setItem("md-show-km-btn", String(v.showKm));
     localStorage.setItem("md-show-images-btn", String(v.showImages));
+    localStorage.setItem("md-show-zenn-btn", String(v.showZenn));
     if (!v.showDocx && filterDocx) {
       setFilterDocx(false);
       localStorage.setItem("md-filter-docx", "false");
@@ -109,7 +114,7 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
   return {
     filterDocx, filterXls, filterKm, filterImages,
     toggleFilterDocx, toggleFilterXls, toggleFilterKm, toggleFilterImages,
-    showDocxBtn, showXlsBtn, showKmBtn, showImagesBtn,
+    showDocxBtn, showXlsBtn, showKmBtn, showImagesBtn, showZennBtn,
     handleSaveFilterVisibility,
     refreshFileTree,
   } as const;

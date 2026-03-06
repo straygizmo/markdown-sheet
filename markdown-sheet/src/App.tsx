@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { mkdir, readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import AiGenerateModal from "./components/AiGenerateModal";
@@ -153,7 +153,7 @@ function App() {
   const {
     filterDocx, filterXls, filterKm, filterImages,
     toggleFilterDocx, toggleFilterXls, toggleFilterKm, toggleFilterImages,
-    showDocxBtn, showXlsBtn, showKmBtn, showImagesBtn,
+    showDocxBtn, showXlsBtn, showKmBtn, showImagesBtn, showZennBtn,
     handleSaveFilterVisibility,
     refreshFileTree,
   } = useFileFilters(folderPath, setFileTree);
@@ -1265,6 +1265,25 @@ function App() {
     [content, handleContentChange]
   );
 
+  // --- Zenn プロジェクト初期化 ---
+  const handleInitZenn = useCallback(async () => {
+    if (!folderPath) {
+      showToast("先にフォルダを開いてください", true);
+      return;
+    }
+    try {
+      const base = folderPath.replace(/\\/g, "/");
+      await mkdir(base + "/articles", { recursive: true });
+      await mkdir(base + "/books", { recursive: true });
+      await mkdir(base + "/images", { recursive: true });
+      showToast("Zenn プロジェクトを初期化しました");
+      await refreshFileTree();
+      await detectZennProject(folderPath);
+    } catch (e) {
+      showToast(`Zenn 初期化に失敗しました: ${e}`, true);
+    }
+  }, [folderPath, showToast, refreshFileTree, detectZennProject]);
+
   // --- Zenn 新規記事作成 ---
   const handleCreateZennArticle = useCallback(
     async (slug: string, title: string, emoji: string, type: "tech" | "idea", topics: string[]) => {
@@ -1791,6 +1810,9 @@ function App() {
           folderPath={folderPath}
           showToast={showToast}
           onRefreshZenn={() => { if (folderPath) detectZennProject(folderPath); }}
+          showZennBtn={showZennBtn}
+          onInitZenn={handleInitZenn}
+          onToggleZennMode={() => setIsZennMode((v) => !v)}
           content={content}
           onHeadingClick={handleOutlineClick}
         />
@@ -1959,7 +1981,7 @@ function App() {
           settings={aiSettings}
           onSave={handleSaveAiSettings}
           onClose={() => setShowSettings(false)}
-          filterVisibility={{ showDocx: showDocxBtn, showXls: showXlsBtn, showKm: showKmBtn, showImages: showImagesBtn }}
+          filterVisibility={{ showDocx: showDocxBtn, showXls: showXlsBtn, showKm: showKmBtn, showImages: showImagesBtn, showZenn: showZennBtn }}
           onSaveFilterVisibility={handleSaveFilterVisibility}
         />
       )}
