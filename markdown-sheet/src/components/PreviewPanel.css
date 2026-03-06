@@ -9,8 +9,7 @@
 .preview-panel-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
+  padding: 0 8px;
   background: var(--bg-overlay);
   border-bottom: 1px solid var(--border);
   font-size: 11px;
@@ -19,6 +18,10 @@
   letter-spacing: 0.05em;
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+.preview-panel-header > span {
+  padding: 6px 4px;
 }
 
 .preview-convert-bar {

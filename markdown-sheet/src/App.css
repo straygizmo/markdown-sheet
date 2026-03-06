@@ -107,21 +107,14 @@ body {
 }
 
 /* ========== View Tabs ========== */
-.view-tabs {
-  display: flex;
-  background: var(--bg-overlay);
-  border-bottom: 1px solid var(--border);
-  padding: 0 8px;
-}
-
 .view-tab {
-  padding: 8px 20px;
+  padding: 6px 16px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text-secondary);
   font-family: var(--font-main);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;

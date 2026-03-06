@@ -2196,23 +2196,6 @@ function App() {
         )
       )}
 
-      {/* View Tabs (Office/マインドマップファイル時は非表示) */}
-      {!isOfficeFile && !isMindmap && (
-        <div className="view-tabs">
-          <button
-            className={`view-tab ${activeViewTab === "preview" ? "active" : ""}`}
-            onClick={() => handleViewTabChange("preview")}
-          >
-            プレビュー
-          </button>
-          <button
-            className={`view-tab ${activeViewTab === "table" ? "active" : ""}`}
-            onClick={() => handleViewTabChange("table")}
-          >
-            テーブル編集
-          </button>
-        </div>
-      )}
 
       <div className="app-body" ref={appBodyRef}>
         {/* 左パネル（フォルダ / アウトライン） */}
@@ -2284,8 +2267,8 @@ function App() {
               onRefreshFileTree={refreshFileTree}
             />
           </div>
-        ) : activeViewTab === "preview" ? (
-          /* Preview mode: Editor + Preview */
+        ) : (
+          /* Editor + Preview/Table */
           <div
             className="content-area"
             style={{ display: "flex", flexDirection: "row" }}
@@ -2450,30 +2433,49 @@ function App() {
                 <div className="divider" onMouseDown={handleMouseDown} />
               </>
             )}
-            <PreviewPanel
-              content={content}
-              filePath={activeFile}
-              previewRef={previewRef}
-              aiSettings={aiSettings}
-              onUpdateMermaidBlock={handleUpdateMermaidBlock}
-              theme={theme}
-              officeFileData={officeFileData}
-              officeFileType={officeFileType}
-              onOpenFile={loadFile}
-              onRefreshFileTree={refreshFileTree}
-            />
+            {activeViewTab === "preview" ? (
+              <PreviewPanel
+                content={content}
+                filePath={activeFile}
+                previewRef={previewRef}
+                aiSettings={aiSettings}
+                onUpdateMermaidBlock={handleUpdateMermaidBlock}
+                theme={theme}
+                officeFileData={officeFileData}
+                officeFileType={officeFileType}
+                onOpenFile={loadFile}
+                onRefreshFileTree={refreshFileTree}
+                activeViewTab={activeViewTab}
+                onViewTabChange={handleViewTabChange}
+              />
+            ) : (
+              <div className="preview-panel-wrapper">
+                <div className="preview-panel-header">
+                  <button
+                    className="view-tab"
+                    onClick={() => handleViewTabChange("preview")}
+                  >
+                    プレビュー
+                  </button>
+                  <button
+                    className="view-tab active"
+                    onClick={() => handleViewTabChange("table")}
+                  >
+                    テーブル編集
+                  </button>
+                </div>
+                <TableEditor
+                  tables={tables}
+                  onUpdateCell={handleUpdateCell}
+                  onAddRow={handleAddRow}
+                  onDeleteRow={handleDeleteRow}
+                  onAddColumn={handleAddColumn}
+                  onDeleteColumn={handleDeleteColumn}
+                  onExportCsv={handleExportCsv}
+                />
+              </div>
+            )}
           </div>
-        ) : (
-          /* Table edit mode */
-          <TableEditor
-            tables={tables}
-            onUpdateCell={handleUpdateCell}
-            onAddRow={handleAddRow}
-            onDeleteRow={handleDeleteRow}
-            onAddColumn={handleAddColumn}
-            onDeleteColumn={handleDeleteColumn}
-            onExportCsv={handleExportCsv}
-          />
         )}
 
         {/* ターミナルパネル（右端） */}

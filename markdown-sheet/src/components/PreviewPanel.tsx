@@ -16,6 +16,8 @@ interface Props {
   officeFileType?: string | null;
   onOpenFile?: (path: string) => void;
   onRefreshFileTree?: () => void;
+  activeViewTab?: "preview" | "table";
+  onViewTabChange?: (tab: "preview" | "table") => void;
 }
 
 export default function PreviewPanel({
@@ -29,6 +31,8 @@ export default function PreviewPanel({
   officeFileType,
   onOpenFile,
   onRefreshFileTree,
+  activeViewTab,
+  onViewTabChange,
 }: Props) {
   const [converting, setConverting] = useState(false);
 
@@ -52,7 +56,24 @@ export default function PreviewPanel({
   return (
     <div className="preview-panel-wrapper">
       <div className="preview-panel-header">
-        <span>プレビュー</span>
+        {onViewTabChange ? (
+          <>
+            <button
+              className={`view-tab ${activeViewTab === "preview" ? "active" : ""}`}
+              onClick={() => onViewTabChange("preview")}
+            >
+              プレビュー
+            </button>
+            <button
+              className={`view-tab ${activeViewTab === "table" ? "active" : ""}`}
+              onClick={() => onViewTabChange("table")}
+            >
+              テーブル編集
+            </button>
+          </>
+        ) : (
+          <span>プレビュー</span>
+        )}
       </div>
       {isOffice && isDocx && (
         <div className="preview-convert-bar">
