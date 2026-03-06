@@ -1,0 +1,94 @@
+import { useEffect } from "react";
+import type { Tab } from "../types";
+
+interface UseKeyboardShortcutsParams {
+  handleSave: () => void;
+  handleUndo: () => void;
+  handleRedo: () => void;
+  handleCopyRichText: () => void;
+  handleInsertFormatting: (format: string) => void;
+  activeViewTab: string;
+  openNewTab: () => void;
+  closeTab: (tabId: string) => void;
+  setShowSearch: React.Dispatch<React.SetStateAction<boolean>>;
+  setEditorVisible: React.Dispatch<React.SetStateAction<boolean>>;
+  setTerminalVisible: React.Dispatch<React.SetStateAction<boolean>>;
+  tabsRef: React.MutableRefObject<Tab[]>;
+  activeTabIdRef: React.MutableRefObject<string>;
+}
+
+export function useKeyboardShortcuts({
+  handleSave,
+  handleUndo,
+  handleRedo,
+  handleCopyRichText,
+  handleInsertFormatting,
+  activeViewTab,
+  openNewTab,
+  closeTab,
+  setShowSearch,
+  setEditorVisible,
+  setTerminalVisible,
+  tabsRef,
+  activeTabIdRef,
+}: UseKeyboardShortcutsParams) {
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "s") {
+        e.preventDefault();
+        handleSave();
+      } else if (e.ctrlKey && e.key === "z") {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.ctrlKey && e.key === "y") {
+        e.preventDefault();
+        handleRedo();
+      } else if (e.ctrlKey && (e.key === "f" || e.key === "h")) {
+        e.preventDefault();
+        setShowSearch((s) => !s);
+      } else if (e.ctrlKey && e.shiftKey && e.key === "C") {
+        e.preventDefault();
+        handleCopyRichText();
+      } else if (e.ctrlKey && e.key === "b" && activeViewTab === "preview") {
+        e.preventDefault();
+        handleInsertFormatting("bold");
+      } else if (e.ctrlKey && e.key === "i" && activeViewTab === "preview") {
+        e.preventDefault();
+        handleInsertFormatting("italic");
+      } else if (e.ctrlKey && e.key === "\\") {
+        e.preventDefault();
+        setEditorVisible((v) => !v);
+      } else if (e.ctrlKey && e.key === "`") {
+        e.preventDefault();
+        setTerminalVisible((v) => !v);
+      } else if (e.ctrlKey && e.key === "t") {
+        e.preventDefault();
+        openNewTab();
+      } else if (e.ctrlKey && e.key === "w") {
+        e.preventDefault();
+        const tab = tabsRef.current.find((t) => t.id === activeTabIdRef.current);
+        if (tab?.dirty) {
+          const name = tab.filePath ? tab.filePath.split(/[\\/]/).pop() ?? "このファイル" : "無題";
+          if (!window.confirm(`"${name}" の変更は保存されていません。閉じますか？`)) return;
+        }
+        closeTab(activeTabIdRef.current);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    handleSave,
+    handleUndo,
+    handleRedo,
+    handleCopyRichText,
+    handleInsertFormatting,
+    activeViewTab,
+    openNewTab,
+    closeTab,
+    setShowSearch,
+    setEditorVisible,
+    setTerminalVisible,
+    tabsRef,
+    activeTabIdRef,
+  ]);
+}
