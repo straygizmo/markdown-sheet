@@ -1,30 +1,54 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import type { KityMinderJson, MinderInstance, MinderNodeInstance } from "../lib/mindmapTypes";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  type Node,
+  type Viewport,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+
+import type { KityMinderJson } from "../lib/mindmapTypes";
+import type { MindmapInternalNode } from "../lib/mindmapTypes";
 import { parseXmindFile } from "../lib/xmindParser";
+import { getThemeColors } from "../lib/mindmapThemes";
+import {
+  computeLayout,
+  assignIds,
+  cloneTree,
+  findNode,
+  findParent,
+  stripIds,
+  type LayoutDirection,
+} from "../lib/mindmapLayout";
+import MindmapNodeComponent from "./MindmapNode";
+import MindmapEdgeComponent from "./MindmapEdge";
 import MindmapToolbar from "./MindmapToolbar";
 import "./MindmapEditor.css";
 
-interface Props {
-  fileData: Uint8Array;
-  fileType: string; // ".km" or ".xmind"
-  filePath: string;
-  theme: "light" | "dark";
-  onSave: (json: KityMinderJson) => void;
-  onDirtyChange: (dirty: boolean) => void;
-}
-
 const MAX_UNDO = 100;
-
 const URL_REGEX = /^(https?|ftp):\/\/.+/i;
 
-/** Show hyperlink dialog (pure DOM modal) */
-function showHyperlinkDialog(
-  minder: MinderInstance,
-  pushSnapshot: () => void,
-  markDirty: () => void,
-): void {
-  const existing = minder.queryCommandValue("HyperLink") as { url?: string; title?: string } | null;
+// Module-level viewport cache (persists across remounts)
+const viewportCache = new Map<string, Viewport>();
 
+const nodeTypes = { mindmap: MindmapNodeComponent };
+const edgeTypes = { mindmap: MindmapEdgeComponent };
+
+// --- Pure DOM dialogs (hyperlink, image) reused from original ---
+
+function showHyperlinkDialog(
+  existing: { url?: string; title?: string } | null,
+  onOk: (url: string, title: string) => void,
+): void {
   const overlay = document.createElement("div");
   overlay.className = "km-modal-overlay";
 
@@ -68,7 +92,6 @@ function showHyperlinkDialog(
   }
 
   const close = () => overlay.remove();
-
   const ok = () => {
     const url = urlInput.value.trim();
     if (!URL_REGEX.test(url)) {
@@ -77,44 +100,23 @@ function showHyperlinkDialog(
       return;
     }
     close();
-    pushSnapshot();
-    minder.execCommand("HyperLink", url, titleInput.value.trim());
-    markDirty();
+    onOk(url, titleInput.value.trim());
   };
 
   header.querySelector(".km-modal-close")!.addEventListener("click", close);
   footer.querySelector(".km-btn-cancel")!.addEventListener("click", close);
   footer.querySelector("#km-link-ok")!.addEventListener("click", ok);
-  overlay.addEventListener("mousedown", (e) => {
-    if (e.target === overlay) close();
-  });
-
-  urlInput.addEventListener("input", () => {
-    errorDiv.style.display = "none";
-  });
-  urlInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") ok();
-    if (e.key === "Escape") close();
-  });
-  titleInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") ok();
-    if (e.key === "Escape") close();
-  });
-
-  requestAnimationFrame(() => {
-    urlInput.focus();
-    urlInput.select();
-  });
+  overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
+  urlInput.addEventListener("input", () => { errorDiv.style.display = "none"; });
+  urlInput.addEventListener("keydown", (e) => { if (e.key === "Enter") ok(); if (e.key === "Escape") close(); });
+  titleInput.addEventListener("keydown", (e) => { if (e.key === "Enter") ok(); if (e.key === "Escape") close(); });
+  requestAnimationFrame(() => { urlInput.focus(); urlInput.select(); });
 }
 
-/** Show image dialog (pure DOM modal with URL / file tabs) */
 function showImageDialog(
-  minder: MinderInstance,
-  pushSnapshot: () => void,
-  markDirty: () => void,
+  existing: { url?: string; title?: string } | null,
+  onOk: (url: string, title: string) => void,
 ): void {
-  const existing = minder.queryCommandValue("Image") as { url?: string; title?: string } | null;
-
   const overlay = document.createElement("div");
   overlay.className = "km-modal-overlay";
 
@@ -177,7 +179,6 @@ function showImageDialog(
     preview.style.display = "";
   }
 
-  // Tab switching
   tabButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       tabButtons.forEach((b) => b.classList.remove("km-tab-active"));
@@ -188,17 +189,11 @@ function showImageDialog(
     });
   });
 
-  // URL input preview
   urlInput.addEventListener("blur", () => {
     const url = urlInput.value.trim();
-    if (url) {
-      currentUrl = url;
-      preview.src = url;
-      preview.style.display = "";
-    }
+    if (url) { currentUrl = url; preview.src = url; preview.style.display = ""; }
   });
 
-  // File input
   fileInput.addEventListener("change", () => {
     const file = fileInput.files?.[0];
     if (!file) return;
@@ -213,387 +208,92 @@ function showImageDialog(
   });
 
   const close = () => overlay.remove();
-
   const ok = () => {
     const url = currentUrl || urlInput.value.trim();
     if (!url) return;
     close();
-    pushSnapshot();
-    minder.execCommand("Image", url, titleInput.value.trim() || currentTitle);
-    markDirty();
+    onOk(url, titleInput.value.trim() || currentTitle);
   };
 
   header.querySelector(".km-modal-close")!.addEventListener("click", close);
   footer.querySelector(".km-btn-cancel")!.addEventListener("click", close);
   footer.querySelector("#km-img-ok")!.addEventListener("click", ok);
-  overlay.addEventListener("mousedown", (e) => {
-    if (e.target === overlay) close();
-  });
-  overlay.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
-  });
-
+  overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
+  overlay.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
   requestAnimationFrame(() => urlInput.focus());
 }
 
-/** Show note editor panel (appended to mindmap container, pure DOM) */
-function showNoteEditor(
-  container: HTMLElement,
-  minder: MinderInstance,
-  pushSnapshot: () => void,
-  markDirty: () => void,
-): void {
-  // If already open, just focus it
-  const existing = container.querySelector(".km-note-panel");
-  if (existing) {
-    (existing.querySelector("textarea") as HTMLTextAreaElement)?.focus();
-    return;
-  }
+// --- Types ---
 
-  const panel = document.createElement("div");
-  panel.className = "km-note-panel";
-
-  const headerDiv = document.createElement("div");
-  headerDiv.className = "km-note-panel-header";
-  headerDiv.innerHTML = `<span>ノート (Markdown)</span><button title="閉じる">&times;</button>`;
-
-  const textarea = document.createElement("textarea");
-  textarea.placeholder = "マークダウンテキストを入力...";
-
-  const noteContent = minder.queryCommandValue("Note") as string || "";
-  textarea.value = noteContent;
-
-  panel.appendChild(headerDiv);
-  panel.appendChild(textarea);
-  container.appendChild(panel);
-
-  const close = () => panel.remove();
-
-  headerDiv.querySelector("button")!.addEventListener("click", close);
-
-  textarea.addEventListener("input", () => {
-    pushSnapshot();
-    minder.execCommand("Note", textarea.value);
-    markDirty();
-  });
-
-  // Track which node we opened the editor for
-  const openedForNode = minder.getSelectedNode();
-
-  // When selection changes: close panel if a different node is selected
-  const handleSelectionChange = () => {
-    const current = minder.getSelectedNode();
-    if (current !== openedForNode) {
-      close();
-      return;
-    }
-    const val = minder.queryCommandValue("Note") as string || "";
-    textarea.value = val;
-  };
-  minder.on("selectionchange", handleSelectionChange);
-
-  // Prevent keyboard events from reaching minder
-  textarea.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    if (e.key === "Escape") close();
-  });
-  textarea.addEventListener("mousedown", (e) => e.stopPropagation());
-
-  // Cleanup minder listener when panel is removed
-  const observer = new MutationObserver(() => {
-    if (!container.contains(panel)) {
-      minder.off("selectionchange", handleSelectionChange);
-      observer.disconnect();
-    }
-  });
-  observer.observe(container, { childList: true });
-
-  requestAnimationFrame(() => textarea.focus());
-}
-
-/** Find the minder node at the given screen point by tracing the DOM element
- *  back through kity's shape hierarchy, mirroring kityminder's getTargetNode(). */
-function findNodeAtPoint(x: number, y: number): MinderNodeInstance | null {
-  const el = document.elementFromPoint(x, y);
-  if (!el) return null;
-  // kity attaches a .shape reference on SVG DOM elements
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let shape = (el as any).shape as any;
-  if (!shape) return null;
-  // Walk up the kity shape container chain to find the minderNode
-  while (shape && !shape.minderNode) {
-    shape = shape.container;
-  }
-  return (shape?.minderNode as MinderNodeInstance) ?? null;
-}
-
-/** Build the context menu DOM tree (pure DOM, no React state) */
-function buildContextMenu(
-  minder: MinderInstance,
-  pushSnapshot: () => void,
-  closeMenu: () => void,
-  markDirty: () => void,
-  onInsertSibling: () => void,
-  onInsertChild: () => void,
-): HTMLDivElement {
-  const menu = document.createElement("div");
-  menu.className = "km-context-menu";
-
-  const makeItem = (label: string, onClick?: () => void): HTMLDivElement => {
-    const item = document.createElement("div");
-    item.className = "km-context-menu-item";
-    item.textContent = label;
-    if (onClick) {
-      item.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        onClick();
-      });
-    }
-    return item;
-  };
-
-  const makeSubmenuItem = (label: string, buildSub: () => HTMLDivElement): HTMLDivElement => {
-    const item = document.createElement("div");
-    item.className = "km-context-menu-item km-has-submenu";
-    const labelSpan = document.createElement("span");
-    labelSpan.textContent = label;
-    const arrow = document.createElement("span");
-    arrow.className = "km-submenu-arrow";
-    arrow.textContent = "▶";
-    item.appendChild(labelSpan);
-    item.appendChild(arrow);
-
-    let sub: HTMLDivElement | null = null;
-    item.addEventListener("mouseenter", () => {
-      if (!sub) {
-        sub = buildSub();
-        item.appendChild(sub);
-      }
-      sub.style.display = "";
-    });
-    item.addEventListener("mouseleave", () => {
-      if (sub) sub.style.display = "none";
-    });
-    return item;
-  };
-
-  const execAndClose = (cmd: string, ...args: unknown[]) => {
-    closeMenu();
-    pushSnapshot();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (minder as any).execCommand(cmd, ...args);
-  };
-
-  // 挿入 submenu
-  const insertItem = makeSubmenuItem("挿入", () => {
-    const sub = document.createElement("div");
-    sub.className = "km-context-submenu";
-    sub.appendChild(makeItem("トピック", () => { closeMenu(); onInsertSibling(); }));
-    sub.appendChild(makeItem("サブトピック", () => { closeMenu(); onInsertChild(); }));
-    return sub;
-  });
-
-  // マーカー submenu
-  const markerItem = makeSubmenuItem("マーカー", () => {
-    const sub = document.createElement("div");
-    sub.className = "km-context-submenu";
-
-    // 優先度
-    const prioItem = makeSubmenuItem("優先度", () => {
-      const prioSub = document.createElement("div");
-      prioSub.className = "km-context-submenu";
-      prioSub.appendChild(makeItem("なし", () => execAndClose("Priority", 0)));
-      for (let p = 1; p <= 5; p++) {
-        prioSub.appendChild(makeItem(`優先度 ${p}`, () => execAndClose("Priority", p)));
-      }
-      return prioSub;
-    });
-    sub.appendChild(prioItem);
-
-    // 進捗
-    const progItem = makeSubmenuItem("進捗", () => {
-      const progSub = document.createElement("div");
-      progSub.className = "km-context-submenu";
-      progSub.appendChild(makeItem("なし", () => execAndClose("Progress", 0)));
-      for (let p = 1; p <= 9; p++) {
-        progSub.appendChild(makeItem(`${Math.round(((p - 1) / 8) * 100)}%`, () => execAndClose("Progress", p)));
-      }
-      return progSub;
-    });
-    sub.appendChild(progItem);
-
-    return sub;
-  });
-
-  menu.appendChild(insertItem);
-  menu.appendChild(markerItem);
-
-  // Separator
-  const sep = document.createElement("div");
-  sep.className = "km-context-menu-separator";
-  menu.appendChild(sep);
-
-  // リンク
-  const selectedNode = minder.getSelectedNode();
-  const hasLink = selectedNode && selectedNode.getData("hyperlink");
-  const linkItem = makeSubmenuItem("リンク", () => {
-    const sub = document.createElement("div");
-    sub.className = "km-context-submenu";
-    sub.appendChild(makeItem("リンクを編集...", () => {
-      closeMenu();
-      showHyperlinkDialog(minder, pushSnapshot, markDirty);
-    }));
-    if (hasLink) {
-      sub.appendChild(makeItem("リンクを削除", () => {
-        closeMenu();
-        pushSnapshot();
-        minder.execCommand("HyperLink", null);
-        markDirty();
-      }));
-    }
-    return sub;
-  });
-  menu.appendChild(linkItem);
-
-  // 画像
-  const hasImage = selectedNode && selectedNode.getData("image");
-  const imageItem = makeSubmenuItem("画像", () => {
-    const sub = document.createElement("div");
-    sub.className = "km-context-submenu";
-    sub.appendChild(makeItem("画像を編集...", () => {
-      closeMenu();
-      showImageDialog(minder, pushSnapshot, markDirty);
-    }));
-    if (hasImage) {
-      sub.appendChild(makeItem("画像を削除", () => {
-        closeMenu();
-        pushSnapshot();
-        minder.execCommand("Image", null);
-        markDirty();
-      }));
-    }
-    return sub;
-  });
-  menu.appendChild(imageItem);
-
-  // ノート
-  const hasNote = selectedNode && selectedNode.getData("note");
-  const noteItem = makeSubmenuItem("ノート", () => {
-    const sub = document.createElement("div");
-    sub.className = "km-context-submenu";
-    sub.appendChild(makeItem("ノートを編集...", () => {
-      closeMenu();
-      // Note editor needs the container - we'll find it via DOM
-      const container = document.querySelector(".mindmap-container") as HTMLElement;
-      if (container) {
-        showNoteEditor(container, minder, pushSnapshot, markDirty);
-      }
-    }));
-    if (hasNote) {
-      sub.appendChild(makeItem("ノートを削除", () => {
-        closeMenu();
-        pushSnapshot();
-        minder.execCommand("Note", null);
-        markDirty();
-      }));
-    }
-    return sub;
-  });
-  menu.appendChild(noteItem);
-
-  // Prevent clicks inside menu from closing it via the global listener
-  menu.addEventListener("mousedown", (e) => e.stopPropagation());
-
-  return menu;
-}
-
-/** Module-level cache to remember viewport position per file path across remounts */
-const viewportCache = new Map<string, { tx: number; ty: number; zoom: number }>();
-
-/** Read viewport state (pan translate + zoom) from the minder */
-function getViewport(minder: MinderInstance): { tx: number; ty: number; zoom: number } | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const m = minder as any;
-  try {
-    const dragger = m._viewDragger || m.getViewDragger?.();
-    const movement = dragger?.getMovement?.();
-    const zoomValue = m._zoomValue ?? 100;
-    if (movement && typeof movement.x === "number") {
-      return { tx: movement.x, ty: movement.y, zoom: zoomValue };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-/** Restore viewport state (pan translate + zoom) on the minder */
-function restoreViewport(minder: MinderInstance, state: { tx: number; ty: number; zoom: number }): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const m = minder as any;
-  try {
-    // Restore zoom via the minder's own zoom() method (sets paper viewport + _zoomValue)
-    if (typeof m.zoom === "function") {
-      m._zoomValue = state.zoom;
-      m.zoom(state.zoom);
-    }
-    // Restore pan position via dragger.moveTo with a kity.Point
-    // (moveTo calls position.round() which requires a kity.Point instance)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const kity = window.kity as any;
-    const dragger = m._viewDragger || m.getViewDragger?.();
-    if (dragger?.moveTo && kity?.Point) {
-      dragger.moveTo(new kity.Point(state.tx, state.ty));
-    }
-  } catch {
-    // ignore
-  }
+interface Props {
+  fileData: Uint8Array;
+  fileType: string;
+  filePath: string;
+  theme: "light" | "dark";
+  onSave: (json: KityMinderJson) => void;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 export interface MindmapEditorHandle {
   getJson: () => KityMinderJson | null;
 }
 
-const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileType, filePath, theme, onSave, onDirtyChange }, ref) => {
-  const readOnly = fileType === ".xmind";
-  const containerRef = useRef<HTMLDivElement>(null);
-  const minderRef = useRef<MinderInstance | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [currentTheme, setCurrentTheme] = useState("fresh-blue");
-  const [currentLayout, setCurrentLayout] = useState("right");
-  const [dirty, setDirty] = useState(false);
+// --- Inner component (needs ReactFlowProvider) ---
 
-  // Undo/Redo via JSON snapshots
+interface InnerProps extends Props {
+  editorRef: React.Ref<MindmapEditorHandle>;
+}
+
+function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDirtyChange, editorRef }: InnerProps) {
+  const readOnly = fileType === ".xmind";
+  const { fitView, setViewport } = useReactFlow();
+
+  // Core state
+  const [tree, setTree] = useState<MindmapInternalNode | null>(null);
+  const [currentTheme, setCurrentTheme] = useState("fresh-blue");
+  const [currentLayout, setCurrentLayout] = useState<LayoutDirection>("right");
+  const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
+  // Context menu
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+
+  // Note panel
+  const [notePanel, setNotePanel] = useState<{ nodeId: string; text: string } | null>(null);
+
+  // Undo/Redo
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
-  const isUndoingRef = useRef(false);
-  const isAddingNodeRef = useRef(false);
-  const initializedRef = useRef(false);
 
-  // Inline text editing state
-  const editingRef = useRef(false);
-  const editInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const editNodeRef = useRef<MinderNodeInstance | null>(null);
-  const startEditNodeRef = useRef<(node: MinderNodeInstance) => void>(() => {});
+  const dirtyRef = useRef(false);
+  const treeRef = useRef<MindmapInternalNode | null>(null);
+  treeRef.current = tree;
 
-  // Context menu ref (DOM-based, not React state)
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useImperativeHandle(ref, () => ({
-    getJson: () => minderRef.current?.exportJson() ?? null,
+  // Export handle
+  useImperativeHandle(editorRef, () => ({
+    getJson: () => {
+      if (!treeRef.current) return null;
+      const root = stripIds(treeRef.current);
+      return { root, theme: currentTheme, template: currentLayout } as KityMinderJson;
+    },
   }));
 
   const markDirty = useCallback(() => {
-    setDirty(true);
-    onDirtyChange(true);
+    if (!dirtyRef.current) {
+      dirtyRef.current = true;
+      setDirty(true);
+      onDirtyChange(true);
+    }
   }, [onDirtyChange]);
 
   const pushSnapshot = useCallback(() => {
-    if (isUndoingRef.current || !minderRef.current) return;
-    const json = JSON.stringify(minderRef.current.exportJson());
+    if (!treeRef.current) return;
+    const json = JSON.stringify(stripIds(treeRef.current));
     const stack = undoStackRef.current;
     if (stack.length > 0 && stack[stack.length - 1] === json) return;
     stack.push(json);
@@ -604,692 +304,494 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
   }, []);
 
   const handleUndo = useCallback(() => {
-    const minder = minderRef.current;
-    if (!minder || undoStackRef.current.length === 0) return;
-    isUndoingRef.current = true;
-    // Save current state to redo
-    redoStackRef.current.push(JSON.stringify(minder.exportJson()));
-    const prev = undoStackRef.current.pop()!;
-    minder.importJson(JSON.parse(prev));
+    if (undoStackRef.current.length === 0 || !treeRef.current) return;
+    redoStackRef.current.push(JSON.stringify(stripIds(treeRef.current)));
+    const prev = JSON.parse(undoStackRef.current.pop()!);
+    setTree(assignIds(prev));
     setCanUndo(undoStackRef.current.length > 0);
     setCanRedo(true);
-    isUndoingRef.current = false;
   }, []);
 
   const handleRedo = useCallback(() => {
-    const minder = minderRef.current;
-    if (!minder || redoStackRef.current.length === 0) return;
-    isUndoingRef.current = true;
-    undoStackRef.current.push(JSON.stringify(minder.exportJson()));
-    const next = redoStackRef.current.pop()!;
-    minder.importJson(JSON.parse(next));
+    if (redoStackRef.current.length === 0 || !treeRef.current) return;
+    undoStackRef.current.push(JSON.stringify(stripIds(treeRef.current)));
+    const next = JSON.parse(redoStackRef.current.pop()!);
+    setTree(assignIds(next));
     setCanUndo(true);
     setCanRedo(redoStackRef.current.length > 0);
-    isUndoingRef.current = false;
   }, []);
 
-  /** Start inline editing for the given node */
-  const startEditNode = useCallback((node: MinderNodeInstance) => {
-    const minder = minderRef.current;
-    const container = containerRef.current;
-    if (!minder || !container || editingRef.current) return;
+  // Compute layout
+  const themeColors = useMemo(() => getThemeColors(currentTheme), [currentTheme]);
+  const { nodes, edges } = useMemo(() => {
+    if (!tree) return { nodes: [], edges: [] };
+    return computeLayout(tree, currentLayout, themeColors);
+  }, [tree, currentLayout, themeColors]);
 
-    // Get the node's bounding box via the underlying SVG DOM element
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const nodeAny = node as any;
-    const nodeRC = nodeAny.getRenderContainer?.() || nodeAny.rc;
-    if (!nodeRC) return;
+  // Add editing overlay data to nodes
+  const displayNodes = useMemo(() => {
+    return nodes.map((n) =>
+      n.id === selectedNodeId ? { ...n, selected: true } : n,
+    );
+  }, [nodes, selectedNodeId]);
 
-    const svgEl: SVGElement | undefined = nodeRC.node;
-    if (!svgEl) return;
-
-    const paperBox = svgEl.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const x = paperBox.x - containerRect.left;
-    const y = paperBox.y - containerRect.top;
-    const w = Math.max(paperBox.width, 60);
-    const h = Math.max(paperBox.height, 24);
-
-    editingRef.current = true;
-    editNodeRef.current = node;
-
-    const textarea = document.createElement("textarea");
-    textarea.className = "km-edit-textarea";
-    textarea.value = node.getText() || "";
-    textarea.style.position = "absolute";
-    textarea.style.left = `${x - 4}px`;
-    textarea.style.top = `${y - 2}px`;
-    textarea.style.minWidth = `${w + 8}px`;
-    textarea.style.minHeight = `${h + 4}px`;
-    textarea.style.zIndex = "200";
-
-    const cleanup = () => {
-      editingRef.current = false;
-      editNodeRef.current = null;
-      textarea.remove();
-      editInputRef.current = null;
-      document.removeEventListener("mousedown", handleClickOutside, true);
-      // Re-focus the minder's key receiver so keyboard navigation resumes
-      minder.focus();
-    };
-
-    const commitEdit = () => {
-      if (!editingRef.current) return;
-      const newText = textarea.value.trim();
-      const oldText = node.getText() || "";
-      cleanup();
-
-      if (newText && newText !== oldText) {
-        pushSnapshot();
-        // Re-select the node before executing the text command
-        minder.select([node], true);
-        minder.execCommand("text", newText);
-        markDirty();
-      }
-    };
-
-    const cancelEdit = () => {
-      cleanup();
-    };
-
-    // Click outside the textarea to commit
-    const handleClickOutside = (e: MouseEvent) => {
-      if (editingRef.current && !textarea.contains(e.target as Node)) {
-        commitEdit();
-      }
-    };
-
-    textarea.addEventListener("keydown", (e) => {
-      e.stopPropagation();
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        commitEdit();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        cancelEdit();
-      }
-    });
-
-    // Prevent minder from stealing focus via mouse events on the textarea
-    textarea.addEventListener("mousedown", (e) => e.stopPropagation());
-    textarea.addEventListener("pointerdown", (e) => e.stopPropagation());
-
-    // Use click-outside instead of blur to commit (avoids focus-stealing race)
-    document.addEventListener("mousedown", handleClickOutside, true);
-
-    editInputRef.current = textarea;
-    container.appendChild(textarea);
-
-    // Focus after a frame to avoid kityminder's event processing stealing focus
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.select();
-    });
-  }, [pushSnapshot, markDirty]);
-
-  // Keep the ref in sync so event handlers always use the latest function
-  startEditNodeRef.current = startEditNode;
-
-  // Force main-topic text to black always.
-  // The dark-mode CSS `[fill="black"]` override changes sub-topic text to light gray,
-  // but main topics should stay black (they have their own light background).
-  // Setting data color to "#000" (not the literal "black") bypasses the CSS selector.
-  const applyMainTopicTextFix = useCallback(() => {
-    const minder = minderRef.current;
-    if (!minder || !initializedRef.current) return;
-    const root = minder.getRoot();
-    if (!root) return;
-    let changed = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (root as any).traverse?.((node: MinderNodeInstance) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const type = (node as any).getType?.();
-      if (type === "main" && node.getData("color") !== "#000") {
-        node.setData("color", "#000");
-        changed = true;
-      }
-    });
-    if (changed) {
-      minder.refresh();
-    }
-  }, []);
-
-  // Initialize minder
+  // Load data
   useEffect(() => {
-    if (!containerRef.current || !window.kityminder) {
-      setError("kityminder-core が読み込まれていません");
-      return;
-    }
-
-    const minder = new window.kityminder.Minder({
-      enableKeyReceiver: true,
-      enableAnimation: true,
-    });
-    minderRef.current = minder;
-    minder.renderTo(containerRef.current);
-    // Clear inline background set by kityminder; CSS var(--bg-base) handles it
-    containerRef.current.style.background = "";
-
-    // Load data
-    const loadData = async () => {
+    const load = async () => {
       try {
         let jsonData: KityMinderJson;
-
         if (fileType === ".xmind") {
           jsonData = await parseXmindFile(fileData);
         } else {
-          // .km format is JSON
           const text = new TextDecoder().decode(fileData);
           jsonData = JSON.parse(text) as KityMinderJson;
         }
 
-        minder.importJson(jsonData);
+        const internal = assignIds(jsonData.root);
+        setTree(internal);
+        setSelectedNodeId(internal.id);
 
-        // Clear inline background set by kityminder's setTheme; CSS var(--bg-base) handles it
-        if (containerRef.current) {
-          containerRef.current.style.background = "";
-        }
-
-        // Apply theme and layout from file
-        if (jsonData.theme) {
-          setCurrentTheme(jsonData.theme);
-        }
+        if (jsonData.theme) setCurrentTheme(jsonData.theme);
         if (jsonData.template) {
-          setCurrentLayout(jsonData.template === "default" ? "right" : jsonData.template);
+          const layout = jsonData.template === "default" ? "right" : jsonData.template;
+          setCurrentLayout(layout as LayoutDirection);
         }
 
-        // Take initial snapshot
         undoStackRef.current = [];
         redoStackRef.current = [];
         setCanUndo(false);
         setCanRedo(false);
         setDirty(false);
+        dirtyRef.current = false;
         onDirtyChange(false);
-        initializedRef.current = true;
-        // Apply dark mode text fix after initial render
-        applyMainTopicTextFix();
+        setEditingNodeId(null);
+        setContextMenu(null);
+        setNotePanel(null);
 
-        // Restore saved viewport position (pan/zoom) if available.
-        // kityminder fires 'paperrender' → camera command centers the view
-        // with animation (viewAnimationDuration). Wait for that to finish,
-        // then override with saved state.
-        const savedVp = viewportCache.get(filePath);
-        if (savedVp) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const animDuration = (minder as any).getOption?.("viewAnimationDuration") || 300;
-          setTimeout(() => {
-            restoreViewport(minder, savedVp);
-          }, animDuration + 100);
-        }
+        // Restore viewport after render
+        const vp = viewportCache.get(filePath);
+        requestAnimationFrame(() => {
+          if (vp) {
+            setViewport(vp);
+          } else {
+            fitView({ padding: 0.2 });
+          }
+        });
       } catch (e) {
-        console.error("マインドマップの読み込みエラー:", e);
         setError(`ファイルの読み込みに失敗しました: ${e instanceof Error ? e.message : String(e)}`);
       }
     };
-
-    loadData();
-
-    // Register dblclick handler on the minder instance (not DOM) so it fires
-    // reliably even when kityminder processes the event internally
-    const handleDblClick = () => {
-      if (readOnly || editingRef.current) return;
-      const selected = minder.getSelectedNode();
-      if (selected) {
-        startEditNodeRef.current(selected);
-      }
-    };
-    minder.on("dblclick", handleDblClick);
-
-    // ── Note icon hover → show balloon tooltip ──
-    let noteTooltip: HTMLDivElement | null = null;
-    let noteShowTimer: ReturnType<typeof setTimeout> | null = null;
-    let noteHideTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const hideNoteTooltip = () => {
-      if (noteTooltip) {
-        noteTooltip.remove();
-        noteTooltip = null;
-      }
-    };
-
-    const handleShowNote = (...args: unknown[]) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const e = args[0] as any;
-      const node = e?.node as MinderNodeInstance | undefined;
-      if (!node) return;
-
-      if (noteHideTimer) { clearTimeout(noteHideTimer); noteHideTimer = null; }
-
-      noteShowTimer = setTimeout(() => {
-        const note = node.getData("note") as string;
-        if (!note) return;
-
-        hideNoteTooltip();
-
-        const tip = document.createElement("div");
-        tip.className = "km-note-tooltip";
-        // Simple text with newlines preserved (plain text, not rendered Markdown)
-        tip.textContent = note;
-
-        // Position near the note icon
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const icon = (node as any).getRenderer?.("NoteIconRenderer")?.getRenderShape?.();
-        const containerEl2 = containerRef.current;
-        if (icon && containerEl2) {
-          const b = icon.getRenderBox("screen");
-          const cr = containerEl2.getBoundingClientRect();
-          tip.style.left = `${Math.round(b.cx - cr.left)}px`;
-          tip.style.top = `${Math.round(b.bottom - cr.top + 8)}px`;
-        }
-
-        // Keep tooltip visible while hovering over it
-        tip.addEventListener("mouseenter", () => {
-          if (noteHideTimer) { clearTimeout(noteHideTimer); noteHideTimer = null; }
-        });
-        tip.addEventListener("mouseleave", () => {
-          hideNoteTooltip();
-        });
-
-        containerRef.current?.appendChild(tip);
-        noteTooltip = tip;
-      }, 300);
-    };
-
-    const handleHideNote = () => {
-      if (noteShowTimer) { clearTimeout(noteShowTimer); noteShowTimer = null; }
-      noteHideTimer = setTimeout(() => {
-        hideNoteTooltip();
-      }, 300);
-    };
-
-    // Single-click note icon → open note editor
-    const handleEditNote = () => {
-      hideNoteTooltip();
-      if (readOnly) return;
-      const container2 = containerRef.current;
-      if (container2) {
-        showNoteEditor(container2, minder, pushSnapshot, markDirty);
-      }
-    };
-
-    minder.on("shownoterequest", handleShowNote);
-    minder.on("hidenoterequest", handleHideNote);
-    minder.on("editnoterequest", handleEditNote);
-
-    // Handle hyperlink icon clicks → open URL in browser
-    const handleHyperlinkClick = (...args: unknown[]) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const e = args[0] as any;
-      const node = (e?.node as MinderNodeInstance) || minder.getSelectedNode();
-      if (!node) return;
-      const url = node.getData("hyperlink") as string;
-      if (url) {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-    };
-    minder.on("hyperlinkclick", handleHyperlinkClick);
-
-    // Also listen for DOM dblclick on the container as a fallback
-    const containerEl = containerRef.current;
-    const handleDomDblClick = () => {
-      if (readOnly || editingRef.current) return;
-      const selected = minder.getSelectedNode();
-      if (selected) {
-        startEditNodeRef.current(selected);
-      }
-    };
-    containerEl.addEventListener("dblclick", handleDomDblClick);
-
-    // Block KityMinder's built-in editing hotkeys (Tab, Enter, Delete, Backspace) for read-only files
-    const handleReadOnlyBlock = (e: KeyboardEvent) => {
-      if (!readOnly) return;
-      const blockedKeys = ["Tab", "Enter", "Delete", "Backspace", "F2"];
-      if (blockedKeys.includes(e.key)) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    };
-    if (readOnly) {
-      containerEl.addEventListener("keydown", handleReadOnlyBlock, true);
-      // Also block at window level to catch kityminder's key receiver
-      window.addEventListener("keydown", handleReadOnlyBlock, true);
-    }
-
-    // Context menu (pure DOM, no React state to avoid re-render interference)
-    const closeMenu = () => {
-      if (contextMenuRef.current) {
-        contextMenuRef.current.remove();
-        contextMenuRef.current = null;
-      }
-    };
-
-    // Right-click context menu: use mousedown (button===2) on window capture
-    // to reliably intercept before kityminder or Tauri handles it.
-    const handleMouseDown = (e: MouseEvent) => {
-      // Left/middle click: close any open menu
-      if (e.button !== 2) {
-        const menu = contextMenuRef.current;
-        if (menu && !menu.contains(e.target as Node)) {
-          closeMenu();
-        }
-        return;
-      }
-
-      // Right-click: only handle inside the mindmap container
-      if (!containerEl.contains(e.target as Node)) return;
-      if (readOnly) return;
-
-      // Find the node at the click position using kity's shape→minderNode chain
-      const found = findNodeAtPoint(e.clientX, e.clientY);
-      if (!found) return; // No node at click position → don't show menu
-      minder.select([found], true);
-
-      // Prevent kityminder from also processing this right-click
-      e.stopPropagation();
-      e.preventDefault();
-
-      closeMenu();
-
-      const insertNode = (cmd: string) => {
-        isAddingNodeRef.current = true;
-        pushSnapshot();
-        minder.execCommand(cmd);
-        const newNode = minder.getSelectedNode();
-        if (newNode && !newNode.getText()) {
-          const parent = newNode.getParent();
-          if (parent) {
-            const count = parent.getChildren().length;
-            newNode.setText(`サブトピック ${count}`);
-          }
-        }
-        minder.layout(0);
-        markDirty();
-        isAddingNodeRef.current = false;
-        if (newNode) {
-          startEditNodeRef.current(newNode);
-        }
-      };
-      const menu = buildContextMenu(
-        minder, pushSnapshot, closeMenu, markDirty,
-        () => insertNode("AppendSiblingNode"),
-        () => insertNode("AppendChildNode"),
-      );
-      menu.style.left = `${e.clientX}px`;
-      menu.style.top = `${e.clientY}px`;
-      document.body.appendChild(menu);
-      contextMenuRef.current = menu;
-    };
-    window.addEventListener("mousedown", handleMouseDown, true);
-
-    // Prevent browser/Tauri default context menu on the container
-    const handlePreventContextMenu = (e: Event) => e.preventDefault();
-    containerEl.addEventListener("contextmenu", handlePreventContextMenu);
-
-    // Save viewport state on every view change (pan/zoom) so the cache is always up-to-date.
-    // This is more reliable than saving on unmount, since React may detach DOM before cleanup.
-    let viewportSaveEnabled = false; // skip the initial camera positioning
-    const handleViewChange = () => {
-      if (!viewportSaveEnabled) return;
-      const vp = getViewport(minder);
-      if (vp) {
-        viewportCache.set(filePath, vp);
-      }
-    };
-    minder.on("viewchange", handleViewChange);
-    minder.on("viewchanged", handleViewChange);
-    // Enable saving after initial camera + viewport restore animations complete.
-    // Initial camera takes ~viewAnimationDuration, restore adds another ~100ms after that.
-    setTimeout(() => { viewportSaveEnabled = true; }, 1000);
-
-    return () => {
-      minder.off("viewchange", handleViewChange);
-      minder.off("viewchanged", handleViewChange);
-      minder.off("dblclick", handleDblClick);
-      minder.off("hyperlinkclick", handleHyperlinkClick);
-      minder.off("shownoterequest", handleShowNote);
-      minder.off("hidenoterequest", handleHideNote);
-      minder.off("editnoterequest", handleEditNote);
-      hideNoteTooltip();
-      containerEl.removeEventListener("dblclick", handleDomDblClick);
-      window.removeEventListener("mousedown", handleMouseDown, true);
-      containerEl.removeEventListener("contextmenu", handlePreventContextMenu);
-      if (readOnly) {
-        containerEl.removeEventListener("keydown", handleReadOnlyBlock, true);
-        window.removeEventListener("keydown", handleReadOnlyBlock, true);
-      }
-      closeMenu();
-      // Cleanup: remove SVG from DOM
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
-      }
-      minderRef.current = null;
-      initializedRef.current = false;
-    };
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileData, fileType, filePath]);
 
-  // Listen for content changes and set default text on newly added empty nodes
-  useEffect(() => {
-    const minder = minderRef.current;
-    if (!minder) return;
-
-    const handleChange = () => {
-      if (!initializedRef.current || readOnly) return;
-      // Skip if we're handling node addition from our keyboard handler
-      if (isAddingNodeRef.current) return;
-      // Check if the selected node has empty text (just added via context menu etc.)
-      const selected = minder.getSelectedNode();
-      if (selected && !selected.isRoot() && !selected.getText()) {
-        const parent = selected.getParent();
-        if (parent) {
-          const siblingCount = parent.getChildren().length;
-          // Use execCommand to set text so kityminder properly renders and lays out
-          minder.execCommand("text", `サブトピック ${siblingCount}`);
-        }
-      }
-      pushSnapshot();
-      if (!dirty) {
-        markDirty();
-      }
-      // Re-apply main-topic color fix for newly added nodes
-      applyMainTopicTextFix();
-    };
-
-    minder.on("contentchange", handleChange);
-    return () => {
-      minder.off("contentchange", handleChange);
-    };
-  }, [dirty, pushSnapshot, markDirty, applyMainTopicTextFix]);
-
-  // Clear any inline background set by kityminder's setTheme so CSS var(--bg-base) applies
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.style.background = "";
-    }
-    applyMainTopicTextFix();
-  }, [theme, applyMainTopicTextFix]);
-
+  // Save handler
   const handleSave = useCallback(() => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    // Strip main-topic color overrides before export so the file stays theme-neutral
-    const root = minder.getRoot();
-    if (root) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (root as any).traverse?.((node: MinderNodeInstance) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const type = (node as any).getType?.();
-        if (type === "main" && node.getData("color") === "#000") {
-          node.setData("color", null);
-        }
-      });
-    }
-    const json = minder.exportJson();
-    // Preserve theme and layout
-    json.theme = currentTheme;
-    json.template = currentLayout;
+    if (!treeRef.current) return;
+    const root = stripIds(treeRef.current);
+    const json: KityMinderJson = { root, theme: currentTheme, template: currentLayout };
     onSave(json);
     setDirty(false);
+    dirtyRef.current = false;
     onDirtyChange(false);
-    // Re-apply the fix after export
-    applyMainTopicTextFix();
-  }, [currentTheme, currentLayout, onSave, onDirtyChange, applyMainTopicTextFix]);
+  }, [currentTheme, currentLayout, onSave, onDirtyChange]);
 
-  const handleChangeTheme = useCallback((themeId: string) => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    pushSnapshot();
-    minder.execCommand("Theme", themeId);
-    // Clear inline background set by kityminder's setTheme; CSS var(--bg-base) handles it
-    if (containerRef.current) {
-      containerRef.current.style.background = "";
-    }
-    setCurrentTheme(themeId);
-    if (!dirty) {
+  // --- Tree mutation helpers ---
+
+  const mutateTree = useCallback(
+    (fn: (clone: MindmapInternalNode) => void) => {
+      if (!treeRef.current) return;
+      pushSnapshot();
+      const clone = cloneTree(treeRef.current);
+      fn(clone);
+      setTree(clone);
       markDirty();
-    }
-    // Re-apply main-topic color fix after theme change (theme resets node colors)
-    applyMainTopicTextFix();
-  }, [pushSnapshot, dirty, markDirty, applyMainTopicTextFix]);
+    },
+    [pushSnapshot, markDirty],
+  );
 
-  const handleChangeLayout = useCallback((layoutId: string) => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    pushSnapshot();
-    minder.execCommand("Template", layoutId);
-    setCurrentLayout(layoutId);
-    if (!dirty) {
+  const insertChild = useCallback(
+    (parentId: string): string | null => {
+      if (!treeRef.current) return null;
+      pushSnapshot();
+      const clone = cloneTree(treeRef.current);
+      const parent = findNode(clone, parentId);
+      if (!parent) return null;
+      const newId = crypto.randomUUID();
+      const childNum = parent.children.length + 1;
+      parent.children.push({
+        id: newId,
+        data: { text: `サブトピック ${childNum}` },
+        children: [],
+      });
+      setTree(clone);
       markDirty();
+      return newId;
+    },
+    [pushSnapshot, markDirty],
+  );
+
+  const insertSibling = useCallback(
+    (nodeId: string): string | null => {
+      if (!treeRef.current) return null;
+      const result = findParent(treeRef.current, nodeId);
+      if (!result) return null; // root has no parent
+      pushSnapshot();
+      const clone = cloneTree(treeRef.current);
+      const parentResult = findParent(clone, nodeId);
+      if (!parentResult) return null;
+      const { parent, index } = parentResult;
+      const newId = crypto.randomUUID();
+      const siblingNum = parent.children.length + 1;
+      parent.children.splice(index + 1, 0, {
+        id: newId,
+        data: { text: `サブトピック ${siblingNum}` },
+        children: [],
+      });
+      setTree(clone);
+      markDirty();
+      return newId;
+    },
+    [pushSnapshot, markDirty],
+  );
+
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      if (!treeRef.current) return;
+      const result = findParent(treeRef.current, nodeId);
+      if (!result) return; // can't delete root
+      pushSnapshot();
+      const clone = cloneTree(treeRef.current);
+      const parentResult = findParent(clone, nodeId)!;
+      const { parent, index } = parentResult;
+      parent.children.splice(index, 1);
+      setTree(clone);
+      markDirty();
+      // Select parent or sibling
+      const newSelection = parent.children[Math.min(index, parent.children.length - 1)]?.id || parent.id;
+      setSelectedNodeId(newSelection);
+    },
+    [pushSnapshot, markDirty],
+  );
+
+  // --- Editing ---
+
+  const startEdit = useCallback(
+    (nodeId: string) => {
+      if (readOnly) return;
+      const node = treeRef.current ? findNode(treeRef.current, nodeId) : null;
+      if (!node) return;
+      setEditingNodeId(nodeId);
+      setEditText(node.data.text);
+    },
+    [readOnly],
+  );
+
+  const commitEdit = useCallback(() => {
+    if (!editingNodeId || !treeRef.current) return;
+    const newText = editText.trim();
+    const node = findNode(treeRef.current, editingNodeId);
+    if (node && newText && newText !== node.data.text) {
+      mutateTree((clone) => {
+        const n = findNode(clone, editingNodeId);
+        if (n) n.data.text = newText;
+      });
     }
-  }, [pushSnapshot, dirty, markDirty]);
+    setEditingNodeId(null);
+  }, [editingNodeId, editText, mutateTree]);
 
-  const handleAddChild = useCallback(() => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    pushSnapshot();
-    minder.execCommand("AppendChildNode");
-  }, [pushSnapshot]);
+  const cancelEdit = useCallback(() => {
+    setEditingNodeId(null);
+  }, []);
 
-  const handleAddSibling = useCallback(() => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    pushSnapshot();
-    minder.execCommand("AppendSiblingNode");
-  }, [pushSnapshot]);
+  // --- Theme/Layout handlers ---
 
-  // Keyboard shortcuts
+  const handleChangeTheme = useCallback(
+    (themeId: string) => {
+      pushSnapshot();
+      setCurrentTheme(themeId);
+      markDirty();
+    },
+    [pushSnapshot, markDirty],
+  );
+
+  const handleChangeLayout = useCallback(
+    (layoutId: string) => {
+      pushSnapshot();
+      setCurrentLayout(layoutId as LayoutDirection);
+      markDirty();
+    },
+    [pushSnapshot, markDirty],
+  );
+
+  // --- Context menu actions ---
+
+  const handleSetPriority = useCallback(
+    (nodeId: string, p: number) => {
+      mutateTree((clone) => {
+        const n = findNode(clone, nodeId);
+        if (n) n.data.priority = p || undefined;
+      });
+      setContextMenu(null);
+    },
+    [mutateTree],
+  );
+
+  const handleSetProgress = useCallback(
+    (nodeId: string, p: number) => {
+      mutateTree((clone) => {
+        const n = findNode(clone, nodeId);
+        if (n) n.data.progress = p || undefined;
+      });
+      setContextMenu(null);
+    },
+    [mutateTree],
+  );
+
+  const handleEditLink = useCallback(
+    (nodeId: string) => {
+      setContextMenu(null);
+      const node = treeRef.current ? findNode(treeRef.current, nodeId) : null;
+      showHyperlinkDialog(
+        node ? { url: node.data.hyperlink, title: node.data.hyperlinkTitle } : null,
+        (url, title) => {
+          mutateTree((clone) => {
+            const n = findNode(clone, nodeId);
+            if (n) {
+              n.data.hyperlink = url;
+              n.data.hyperlinkTitle = title || undefined;
+            }
+          });
+        },
+      );
+    },
+    [mutateTree],
+  );
+
+  const handleDeleteLink = useCallback(
+    (nodeId: string) => {
+      mutateTree((clone) => {
+        const n = findNode(clone, nodeId);
+        if (n) {
+          n.data.hyperlink = undefined;
+          n.data.hyperlinkTitle = undefined;
+        }
+      });
+      setContextMenu(null);
+    },
+    [mutateTree],
+  );
+
+  const handleEditImage = useCallback(
+    (nodeId: string) => {
+      setContextMenu(null);
+      const node = treeRef.current ? findNode(treeRef.current, nodeId) : null;
+      showImageDialog(
+        node ? { url: node.data.image, title: "" } : null,
+        (url, _title) => {
+          mutateTree((clone) => {
+            const n = findNode(clone, nodeId);
+            if (n) {
+              n.data.image = url;
+              if (!n.data.imageSize) n.data.imageSize = { width: 200, height: 200 };
+            }
+          });
+        },
+      );
+    },
+    [mutateTree],
+  );
+
+  const handleDeleteImage = useCallback(
+    (nodeId: string) => {
+      mutateTree((clone) => {
+        const n = findNode(clone, nodeId);
+        if (n) {
+          n.data.image = undefined;
+          n.data.imageSize = undefined;
+        }
+      });
+      setContextMenu(null);
+    },
+    [mutateTree],
+  );
+
+  const handleOpenNote = useCallback(
+    (nodeId: string) => {
+      setContextMenu(null);
+      const node = treeRef.current ? findNode(treeRef.current, nodeId) : null;
+      setNotePanel({ nodeId, text: node?.data.note || "" });
+    },
+    [],
+  );
+
+  const handleDeleteNote = useCallback(
+    (nodeId: string) => {
+      mutateTree((clone) => {
+        const n = findNode(clone, nodeId);
+        if (n) n.data.note = undefined;
+      });
+      setContextMenu(null);
+      if (notePanel?.nodeId === nodeId) setNotePanel(null);
+    },
+    [mutateTree, notePanel],
+  );
+
+  const handleNoteChange = useCallback(
+    (text: string) => {
+      if (!notePanel) return;
+      setNotePanel((prev) => (prev ? { ...prev, text } : null));
+      mutateTree((clone) => {
+        const n = findNode(clone, notePanel.nodeId);
+        if (n) n.data.note = text || undefined;
+      });
+    },
+    [notePanel, mutateTree],
+  );
+
+  // --- React Flow event handlers ---
+
+  const handleNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (editingNodeId && editingNodeId !== node.id) {
+        commitEdit();
+      }
+      setSelectedNodeId(node.id);
+      setContextMenu(null);
+    },
+    [editingNodeId, commitEdit],
+  );
+
+  const handleNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      startEdit(node.id);
+    },
+    [startEdit],
+  );
+
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault();
+      if (readOnly) return;
+      setSelectedNodeId(node.id);
+      setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
+    },
+    [readOnly],
+  );
+
+  const handlePaneClick = useCallback(() => {
+    if (editingNodeId) commitEdit();
+    setContextMenu(null);
+  }, [editingNodeId, commitEdit]);
+
+  const handleMoveEnd = useCallback(
+    (_: unknown, viewport: Viewport) => {
+      viewportCache.set(filePath, viewport);
+    },
+    [filePath],
+  );
+
+  // --- Keyboard shortcuts ---
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if currently editing a node
-      if (editingRef.current) return;
-
-      const minder = minderRef.current;
-      if (!minder) return;
-
-      const container = containerRef.current;
-      if (!container) return;
+      // Don't handle when editing note
+      if (notePanel && document.activeElement?.tagName === "TEXTAREA") return;
 
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "s") {
           e.preventDefault();
           handleSave();
-        } else if (e.key === "z") {
+          return;
+        }
+        if (e.key === "z") {
           e.preventDefault();
           handleUndo();
-        } else if (e.key === "y") {
+          return;
+        }
+        if (e.key === "y") {
           e.preventDefault();
           handleRedo();
+          return;
         }
       }
 
-      // F2 to edit selected node text (not in read-only mode)
-      if (e.key === "F2" && !readOnly) {
+      if (readOnly) return;
+      if (editingNodeId) return; // handled by edit input
+
+      if (!selectedNodeId || !treeRef.current) return;
+
+      if (e.key === "F2") {
         e.preventDefault();
-        const selected = minder.getSelectedNode();
-        if (selected) {
-          startEditNodeRef.current(selected);
-        }
+        startEdit(selectedNodeId);
+        return;
       }
 
-      // Enter: add sibling topic
-      if (e.key === "Enter" && !e.shiftKey && !readOnly) {
-        const selected = minder.getSelectedNode();
-        if (selected && !selected.isRoot()) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          isAddingNodeRef.current = true;
-          pushSnapshot();
-          minder.execCommand("AppendSiblingNode");
-          const newNode = minder.getSelectedNode();
-          if (newNode && !newNode.getText()) {
-            const parent = newNode.getParent();
-            if (parent) {
-              const siblingCount = parent.getChildren().length;
-              newNode.setText(`サブトピック ${siblingCount}`);
-            }
-          }
-          minder.layout(0);
-          markDirty();
-          isAddingNodeRef.current = false;
-          if (newNode) {
-            startEditNodeRef.current(newNode);
-          }
-        }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        deleteNode(selectedNodeId);
+        return;
       }
 
-      // Tab: add child topic
-      if (e.key === "Tab" && !readOnly) {
-        const selected = minder.getSelectedNode();
-        if (selected) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          isAddingNodeRef.current = true;
-          pushSnapshot();
-          minder.execCommand("AppendChildNode");
-          const newNode = minder.getSelectedNode();
-          if (newNode && !newNode.getText()) {
-            const parent = newNode.getParent();
-            if (parent) {
-              const childCount = parent.getChildren().length;
-              newNode.setText(`サブトピック ${childCount}`);
-            }
-          }
-          minder.layout(0);
-          markDirty();
-          isAddingNodeRef.current = false;
-          if (newNode) {
-            startEditNodeRef.current(newNode);
-          }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
+        const newId = insertChild(selectedNodeId);
+        if (newId) {
+          setSelectedNodeId(newId);
+          requestAnimationFrame(() => startEdit(newId));
         }
+        return;
       }
 
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Can't add sibling to root
+        if (selectedNodeId === treeRef.current.id) return;
+        const newId = insertSibling(selectedNodeId);
+        if (newId) {
+          setSelectedNodeId(newId);
+          requestAnimationFrame(() => startEdit(newId));
+        }
+        return;
+      }
+
+      // Arrow key navigation
+      if (e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        navigateArrow(e.key, selectedNodeId, treeRef.current, currentLayout, setSelectedNodeId);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleUndo, handleRedo, startEditNode, handleSave, pushSnapshot, markDirty]);
+  }, [
+    readOnly, editingNodeId, selectedNodeId, currentLayout, notePanel,
+    handleSave, handleUndo, handleRedo, startEdit, deleteNode, insertChild, insertSibling,
+  ]);
 
-  const handleDeleteNode = useCallback(() => {
-    const minder = minderRef.current;
-    if (!minder) return;
-    pushSnapshot();
-    minder.execCommand("RemoveNode");
-  }, [pushSnapshot]);
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".km-context-menu")) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [contextMenu]);
 
   if (error) {
-    return (
-      <div className="mindmap-error">
-        <p>{error}</p>
-      </div>
-    );
+    return <div className="mindmap-error"><p>{error}</p></div>;
   }
 
+  const ctxNode = contextMenu && treeRef.current ? findNode(treeRef.current, contextMenu.nodeId) : null;
+
   return (
-    <div className="mindmap-editor">
+    <div className="mindmap-editor" data-theme={theme}>
       <MindmapToolbar
         currentTheme={currentTheme}
         currentLayout={currentLayout}
@@ -1301,8 +803,368 @@ const MindmapEditor = forwardRef<MindmapEditorHandle, Props>(({ fileData, fileTy
         onUndo={handleUndo}
         onRedo={handleRedo}
       />
-      <div className="mindmap-container" ref={containerRef} data-theme={theme} />
+      <div className="mindmap-container">
+        <ReactFlow
+          nodes={displayNodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodeClick={handleNodeClick}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          onNodeContextMenu={handleNodeContextMenu}
+          onPaneClick={handlePaneClick}
+          onMoveEnd={handleMoveEnd}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          selectNodesOnDrag={false}
+          panOnDrag
+          zoomOnScroll
+          zoomOnPinch
+          minZoom={0.1}
+          maxZoom={3}
+          fitView={!viewportCache.has(filePath)}
+          fitViewOptions={{ padding: 0.2 }}
+          defaultViewport={viewportCache.get(filePath)}
+          proOptions={{ hideAttribution: true }}
+        />
+
+        {/* Inline edit overlay */}
+        {editingNodeId && (() => {
+          const editNode = nodes.find((n) => n.id === editingNodeId);
+          if (!editNode) return null;
+          return (
+            <EditOverlay
+              nodeId={editingNodeId}
+              text={editText}
+              onChange={setEditText}
+              onCommit={commitEdit}
+              onCancel={cancelEdit}
+            />
+          );
+        })()}
+      </div>
+
+      {/* Context menu */}
+      {contextMenu && ctxNode && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          nodeId={contextMenu.nodeId}
+          node={ctxNode}
+          isRoot={treeRef.current?.id === contextMenu.nodeId}
+          onInsertChild={() => {
+            const newId = insertChild(contextMenu.nodeId);
+            setContextMenu(null);
+            if (newId) {
+              setSelectedNodeId(newId);
+              requestAnimationFrame(() => startEdit(newId));
+            }
+          }}
+          onInsertSibling={() => {
+            const newId = insertSibling(contextMenu.nodeId);
+            setContextMenu(null);
+            if (newId) {
+              setSelectedNodeId(newId);
+              requestAnimationFrame(() => startEdit(newId));
+            }
+          }}
+          onDelete={() => { deleteNode(contextMenu.nodeId); setContextMenu(null); }}
+          onSetPriority={(p) => handleSetPriority(contextMenu.nodeId, p)}
+          onSetProgress={(p) => handleSetProgress(contextMenu.nodeId, p)}
+          onEditLink={() => handleEditLink(contextMenu.nodeId)}
+          onDeleteLink={() => handleDeleteLink(contextMenu.nodeId)}
+          onEditImage={() => handleEditImage(contextMenu.nodeId)}
+          onDeleteImage={() => handleDeleteImage(contextMenu.nodeId)}
+          onEditNote={() => handleOpenNote(contextMenu.nodeId)}
+          onDeleteNote={() => handleDeleteNote(contextMenu.nodeId)}
+        />
+      )}
+
+      {/* Note panel */}
+      {notePanel && (
+        <div className="km-note-panel">
+          <div className="km-note-panel-header">
+            <span>ノート (Markdown)</span>
+            <button onClick={() => setNotePanel(null)} title="閉じる">&times;</button>
+          </div>
+          <textarea
+            value={notePanel.text}
+            onChange={(e) => handleNoteChange(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") setNotePanel(null);
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            placeholder="マークダウンテキストを入力..."
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+// --- Edit overlay component ---
+
+function EditOverlay({
+  nodeId,
+  text,
+  onChange,
+  onCommit,
+  onCancel,
+}: {
+  nodeId: string;
+  text: string;
+  onChange: (text: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // Find the React Flow node element and position overlay on it
+    const el = document.querySelector(`[data-id="${nodeId}"]`) as HTMLElement | null;
+    const textarea = inputRef.current;
+    if (!el || !textarea) return;
+
+    const container = el.closest(".mindmap-container") as HTMLElement;
+    if (!container) return;
+
+    const rect = el.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    textarea.style.left = `${rect.left - containerRect.left - 2}px`;
+    textarea.style.top = `${rect.top - containerRect.top - 2}px`;
+    textarea.style.minWidth = `${rect.width + 8}px`;
+    textarea.style.minHeight = `${rect.height + 4}px`;
+
+    textarea.focus();
+    textarea.select();
+  }, [nodeId]);
+
+  return (
+    <textarea
+      ref={inputRef}
+      className="km-edit-textarea"
+      value={text}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          onCommit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={onCommit}
+    />
+  );
+}
+
+// --- Context menu component ---
+
+function ContextMenu({
+  x,
+  y,
+  nodeId: _nodeId,
+  node,
+  isRoot,
+  onInsertChild,
+  onInsertSibling,
+  onDelete,
+  onSetPriority,
+  onSetProgress,
+  onEditLink,
+  onDeleteLink,
+  onEditImage,
+  onDeleteImage,
+  onEditNote,
+  onDeleteNote,
+}: {
+  x: number;
+  y: number;
+  nodeId: string;
+  node: MindmapInternalNode;
+  isRoot: boolean;
+  onInsertChild: () => void;
+  onInsertSibling: () => void;
+  onDelete: () => void;
+  onSetPriority: (p: number) => void;
+  onSetProgress: (p: number) => void;
+  onEditLink: () => void;
+  onDeleteLink: () => void;
+  onEditImage: () => void;
+  onDeleteImage: () => void;
+  onEditNote: () => void;
+  onDeleteNote: () => void;
+}) {
+  return (
+    <div className="km-context-menu" style={{ left: x, top: y }} onMouseDown={(e) => e.stopPropagation()}>
+      {/* Insert */}
+      <div className="km-context-menu-item km-has-submenu">
+        <span>挿入</span>
+        <span className="km-submenu-arrow">▶</span>
+        <div className="km-context-submenu">
+          {!isRoot && (
+            <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onInsertSibling(); }}>
+              トピック
+            </div>
+          )}
+          <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onInsertChild(); }}>
+            サブトピック
+          </div>
+        </div>
+      </div>
+
+      {/* Markers */}
+      <div className="km-context-menu-item km-has-submenu">
+        <span>マーカー</span>
+        <span className="km-submenu-arrow">▶</span>
+        <div className="km-context-submenu">
+          <div className="km-context-menu-item km-has-submenu">
+            <span>優先度</span>
+            <span className="km-submenu-arrow">▶</span>
+            <div className="km-context-submenu">
+              <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onSetPriority(0); }}>なし</div>
+              {[1, 2, 3, 4, 5].map((p) => (
+                <div key={p} className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onSetPriority(p); }}>
+                  優先度 {p}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="km-context-menu-item km-has-submenu">
+            <span>進捗</span>
+            <span className="km-submenu-arrow">▶</span>
+            <div className="km-context-submenu">
+              <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onSetProgress(0); }}>なし</div>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((p) => (
+                <div key={p} className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onSetProgress(p); }}>
+                  {Math.round(((p - 1) / 8) * 100)}%
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="km-context-menu-separator" />
+
+      {/* Link */}
+      <div className="km-context-menu-item km-has-submenu">
+        <span>リンク</span>
+        <span className="km-submenu-arrow">▶</span>
+        <div className="km-context-submenu">
+          <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onEditLink(); }}>
+            リンクを編集...
+          </div>
+          {node.data.hyperlink && (
+            <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onDeleteLink(); }}>
+              リンクを削除
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Image */}
+      <div className="km-context-menu-item km-has-submenu">
+        <span>画像</span>
+        <span className="km-submenu-arrow">▶</span>
+        <div className="km-context-submenu">
+          <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onEditImage(); }}>
+            画像を編集...
+          </div>
+          {node.data.image && (
+            <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onDeleteImage(); }}>
+              画像を削除
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Note */}
+      <div className="km-context-menu-item km-has-submenu">
+        <span>ノート</span>
+        <span className="km-submenu-arrow">▶</span>
+        <div className="km-context-submenu">
+          <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onEditNote(); }}>
+            ノートを編集...
+          </div>
+          {node.data.note && (
+            <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onDeleteNote(); }}>
+              ノートを削除
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Delete */}
+      {!isRoot && (
+        <>
+          <div className="km-context-menu-separator" />
+          <div className="km-context-menu-item km-context-menu-danger" onMouseDown={(e) => { e.stopPropagation(); onDelete(); }}>
+            削除
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// --- Arrow key navigation ---
+
+function navigateArrow(
+  key: string,
+  selectedId: string,
+  tree: MindmapInternalNode,
+  layout: LayoutDirection,
+  setSelected: (id: string) => void,
+) {
+  const parentResult = findParent(tree, selectedId);
+  const current = findNode(tree, selectedId);
+  if (!current) return;
+
+  const isHorizontal = layout !== "bottom";
+
+  // Map arrow keys to tree directions based on layout
+  let action: "parent" | "child" | "prevSibling" | "nextSibling" | null = null;
+
+  if (isHorizontal) {
+    if (key === "ArrowLeft") action = "parent";
+    if (key === "ArrowRight") action = "child";
+    if (key === "ArrowUp") action = "prevSibling";
+    if (key === "ArrowDown") action = "nextSibling";
+  } else {
+    if (key === "ArrowUp") action = "parent";
+    if (key === "ArrowDown") action = "child";
+    if (key === "ArrowLeft") action = "prevSibling";
+    if (key === "ArrowRight") action = "nextSibling";
+  }
+
+  if (action === "parent" && parentResult) {
+    setSelected(parentResult.parent.id);
+  } else if (action === "child" && current.children.length > 0) {
+    setSelected(current.children[0].id);
+  } else if (action === "prevSibling" && parentResult) {
+    const { parent, index } = parentResult;
+    if (index > 0) setSelected(parent.children[index - 1].id);
+  } else if (action === "nextSibling" && parentResult) {
+    const { parent, index } = parentResult;
+    if (index < parent.children.length - 1) setSelected(parent.children[index + 1].id);
+  }
+}
+
+// --- Wrapper with ReactFlowProvider ---
+
+const MindmapEditor = forwardRef<MindmapEditorHandle, Props>((props, ref) => {
+  return (
+    <ReactFlowProvider>
+      <MindmapEditorInner {...props} editorRef={ref} />
+    </ReactFlowProvider>
   );
 });
 
