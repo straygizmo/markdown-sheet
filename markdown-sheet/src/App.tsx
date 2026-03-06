@@ -12,6 +12,7 @@ import SearchReplace from "./components/SearchReplace";
 import StatusBar from "./components/StatusBar";
 import TabBar from "./components/TabBar";
 import TableEditor from "./components/TableEditor";
+import TableGridSelector from "./components/TableGridSelector";
 import Terminal from "./components/Terminal";
 import Toolbar from "./components/Toolbar";
 import { useFileWatcher } from "./hooks/useFileWatcher";
@@ -464,6 +465,8 @@ function App() {
   const appBodyRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const [showTableGrid, setShowTableGrid] = useState(false);
+  const tableGridBtnRef = useRef<HTMLButtonElement>(null);
 
   // --- Editor undo/redo stack ---
   const undoStackRef = useRef<string[]>([]);
@@ -1716,6 +1719,37 @@ function App() {
     [content, handleContentChange]
   );
 
+  // --- Insert Table ---
+  const handleInsertTable = useCallback(
+    (rows: number, cols: number) => {
+      const textarea = editorRef.current;
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const before = content.substring(0, start);
+      const after = content.substring(start);
+
+      const nl = before.endsWith("\n") || before === "" ? "" : "\n";
+      const headers = Array.from({ length: cols }, (_, i) => ` 列${i + 1} `).join("|");
+      const separator = Array.from({ length: cols }, () => " --- ").join("|");
+      const emptyRow = Array.from({ length: cols }, () => "  ").join("|");
+      const dataRows = Array.from({ length: rows }, () => `|${emptyRow}|`).join("\n");
+
+      const table = `${nl}|${headers}|\n|${separator}|\n${dataRows}\n`;
+      const newContent = `${before}${table}${after}`;
+
+      handleContentChange(newContent);
+      setShowTableGrid(false);
+
+      const cursorTarget = before.length + nl.length + `|${headers}|\n|${separator}|\n|`.length + 1;
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(cursorTarget, cursorTarget);
+      }, 0);
+    },
+    [content, handleContentChange]
+  );
+
   // --- Mermaid ブロックを AI で置換 ---
   const handleUpdateMermaidBlock = useCallback(
     (blockIndex: number, newSource: string) => {
@@ -2292,6 +2326,15 @@ function App() {
                     <span className="format-separator" />
                     <button className="format-btn" onMouseDown={(e) => { e.preventDefault(); handleInsertToc(); }} title="目次を挿入">目次</button>
                     <button className="format-btn" onMouseDown={(e) => { e.preventDefault(); handleImportCsv(); }} title="CSVをインポートして追加">CSV</button>
+                    <span className="format-separator" />
+                    <button ref={tableGridBtnRef} className="format-btn" onMouseDown={(e) => { e.preventDefault(); setShowTableGrid((v) => !v); }} title="表を挿入">&#9638; 表</button>
+                    {showTableGrid && (
+                      <TableGridSelector
+                        anchorRef={tableGridBtnRef}
+                        onSelect={handleInsertTable}
+                        onClose={() => setShowTableGrid(false)}
+                      />
+                    )}
                   </div>
                   {/* ===== AI ツールバー (常に全表示) ===== */}
                   {(() => {

@@ -310,10 +310,15 @@ body {
   flex-shrink: 0;
 }
 
-.format-btn:hover {
+.format-btn:hover:not(:disabled) {
   background: var(--primary);
   border-color: var(--primary);
   color: white;
+}
+
+.format-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .format-btn-mono {

@@ -636,6 +636,58 @@ const TableEditor: FC<Props> = ({
           {"</>"}
         </button>
         <div className="fmt-separator" />
+        <button
+          className="fmt-btn fmt-btn-text"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (!selectedCell) return;
+            const row = selectedCell.row === -1 ? 0 : selectedCell.row;
+            onAddRow(selectedCell.tableIndex, row, "below");
+          }}
+          title="行を追加"
+          disabled={!selectedCell}
+        >
+          +行
+        </button>
+        <button
+          className="fmt-btn fmt-btn-text"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (!selectedCell || selectedCell.row === -1) return;
+            onDeleteRow(selectedCell.tableIndex, selectedCell.row);
+            setSelectedCell(null);
+          }}
+          title="行を削除"
+          disabled={!selectedCell || selectedCell.row === -1 || tables[selectedCell.tableIndex]?.rows.length <= 1}
+        >
+          -行
+        </button>
+        <button
+          className="fmt-btn fmt-btn-text"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (!selectedCell) return;
+            onAddColumn(selectedCell.tableIndex, selectedCell.col, "right");
+          }}
+          title="列を追加"
+          disabled={!selectedCell}
+        >
+          +列
+        </button>
+        <button
+          className="fmt-btn fmt-btn-text"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (!selectedCell) return;
+            onDeleteColumn(selectedCell.tableIndex, selectedCell.col);
+            setSelectedCell(null);
+          }}
+          title="列を削除"
+          disabled={!selectedCell || tables[selectedCell.tableIndex]?.headers.length <= 1}
+        >
+          -列
+        </button>
+        <div className="fmt-separator" />
         <span className="fmt-hint">
           {selectedCell
             ? `R${selectedCell.row === -1 ? "H" : selectedCell.row + 1}C${selectedCell.col + 1}`

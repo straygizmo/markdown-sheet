@@ -60,6 +60,19 @@
   background: var(--border-hover);
 }
 
+.fmt-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.fmt-btn-text {
+  width: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .fmt-italic {
   font-family: Georgia, "Times New Roman", serif;
 }
