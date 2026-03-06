@@ -1,4 +1,3 @@
-import { hierarchy, tree as d3Tree } from "d3-hierarchy";
 import type { Node, Edge } from "@xyflow/react";
 import type { KityMinderNode, MindmapInternalNode } from "./mindmapTypes";
 import type { ThemeColors } from "./mindmapThemes";
@@ -23,7 +22,7 @@ export interface MindmapNodeData {
   hasChildren: boolean;
 }
 
-const V_SPACING = 50;
+const V_GAP = 16;
 const H_SPACING = 220;
 const FILETREE_INDENT = 30;
 const FILETREE_ROW = 34;
@@ -38,8 +37,11 @@ function estimateNodeWidth(text: string, depth: number): number {
   return Math.max(80, asciiCount * charWidth + cjkCount * fontSize + padding);
 }
 
-function estimateNodeHeight(depth: number): number {
-  return depth === 0 ? 44 : depth === 1 ? 36 : 30;
+function estimateNodeHeight(depth: number, _text: string, imageSize?: { width: number; height: number }): number {
+  const base = depth === 0 ? 44 : depth === 1 ? 36 : 30;
+  if (!imageSize) return base;
+  // imageSize stores the actual display dimensions (explicit width/height on img element)
+  return base + (imageSize.height || 200) + 8;
 }
 
 function visibleChildren(node: MindmapInternalNode): MindmapInternalNode[] {
@@ -72,6 +74,70 @@ function makeNodeData(
   };
 }
 
+// --- Compact tree layout: fixed gap between nodes, variable node heights ---
+
+function subtreeSpan(node: MindmapInternalNode, depth: number, cache: Map<string, number>): number {
+  const cached = cache.get(node.id);
+  if (cached !== undefined) return cached;
+
+  const nodeH = estimateNodeHeight(depth, node.data.text, node.data.imageSize);
+  const children = visibleChildren(node);
+  if (children.length === 0) {
+    cache.set(node.id, nodeH);
+    return nodeH;
+  }
+
+  let childrenSpan = 0;
+  for (let i = 0; i < children.length; i++) {
+    if (i > 0) childrenSpan += V_GAP;
+    childrenSpan += subtreeSpan(children[i], depth + 1, cache);
+  }
+
+  const span = Math.max(nodeH, childrenSpan);
+  cache.set(node.id, span);
+  return span;
+}
+
+interface PlacedNode {
+  node: MindmapInternalNode;
+  depth: number;
+  cx: number; // center x (depth direction)
+  cy: number; // center y (spread direction)
+  w: number;
+  h: number;
+}
+
+function placeSubtree(
+  node: MindmapInternalNode,
+  depth: number,
+  top: number,
+  cache: Map<string, number>,
+  result: PlacedNode[],
+) {
+  const nodeH = estimateNodeHeight(depth, node.data.text, node.data.imageSize);
+  const w = estimateNodeWidth(node.data.text, depth);
+  const span = subtreeSpan(node, depth, cache);
+  const cy = top + span / 2;
+
+  result.push({ node, depth, cx: depth * H_SPACING, cy, w, h: nodeH });
+
+  const children = visibleChildren(node);
+  if (children.length === 0) return;
+
+  let childrenSpan = 0;
+  for (let i = 0; i < children.length; i++) {
+    if (i > 0) childrenSpan += V_GAP;
+    childrenSpan += subtreeSpan(children[i], depth + 1, cache);
+  }
+
+  let childTop = top + (span - childrenSpan) / 2;
+  for (const child of children) {
+    const childSpan = subtreeSpan(child, depth + 1, cache);
+    placeSubtree(child, depth + 1, childTop, cache, result);
+    childTop += childSpan + V_GAP;
+  }
+}
+
 function layoutTree(
   root: MindmapInternalNode,
   direction: "right" | "left" | "bottom",
@@ -82,57 +148,61 @@ function layoutTree(
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  const h = hierarchy(root, visibleChildren);
+  const cache = new Map<string, number>();
+  const placed: PlacedNode[] = [];
+  placeSubtree(root, 0, 0, cache, placed);
 
-  const isHorizontal = direction !== "bottom";
-  const layout = d3Tree<MindmapInternalNode>()
-    .nodeSize(isHorizontal ? [V_SPACING, H_SPACING] : [H_SPACING, V_SPACING])
-    .separation((a, b) => (a.parent === b.parent ? 1 : 1.3));
+  // Build parent map
+  const parentMap = new Map<string, string>();
+  for (const p of placed) {
+    for (const child of visibleChildren(p.node)) {
+      parentMap.set(child.id, p.node.id);
+    }
+  }
 
-  const layoutRoot = layout(h);
+  // Center the tree around y=0
+  const totalSpan = subtreeSpan(root, 0, cache);
+  const yShift = -totalSpan / 2;
 
-  layoutRoot.each((d) => {
-    const node = d.data;
-    const depth = d.depth;
-    const w = estimateNodeWidth(node.data.text, depth);
-    const nh = estimateNodeHeight(depth);
-
+  for (const p of placed) {
     let x: number, y: number;
     if (direction === "right") {
-      x = d.y + xOffset - w / 2;
-      y = d.x + yOffset - nh / 2;
+      x = p.cx + xOffset - p.w / 2;
+      y = p.cy + yShift + yOffset - p.h / 2;
     } else if (direction === "left") {
-      x = -d.y + xOffset - w / 2;
-      y = d.x + yOffset - nh / 2;
+      x = -p.cx + xOffset - p.w / 2;
+      y = p.cy + yShift + yOffset - p.h / 2;
     } else {
-      x = d.x + xOffset - w / 2;
-      y = d.y + yOffset - nh / 2;
+      // bottom: swap axes
+      x = p.cy + yShift + xOffset - p.w / 2;
+      y = p.cx + yOffset - p.h / 2;
     }
 
     nodes.push({
-      id: node.id,
+      id: p.node.id,
       type: "mindmap",
       position: { x, y },
-      data: makeNodeData(node, depth, direction, themeColors) as unknown as Record<string, unknown>,
+      data: makeNodeData(p.node, p.depth, direction, themeColors) as unknown as Record<string, unknown>,
     });
 
-    if (d.parent) {
+    const parentId = parentMap.get(p.node.id);
+    if (parentId) {
       const sourceHandle =
         direction === "bottom" ? "source-bottom" : direction === "left" ? "source-left" : "source-right";
       const targetHandle =
         direction === "bottom" ? "target-top" : direction === "left" ? "target-right" : "target-left";
 
       edges.push({
-        id: `e-${d.parent.data.id}-${node.id}`,
-        source: d.parent.data.id,
-        target: node.id,
+        id: `e-${parentId}-${p.node.id}`,
+        source: parentId,
+        target: p.node.id,
         sourceHandle,
         targetHandle,
         type: "mindmap",
-        data: { color: themeColors.connection, depth } as unknown as Record<string, unknown>,
+        data: { color: themeColors.connection, depth: p.depth } as unknown as Record<string, unknown>,
       });
     }
-  });
+  }
 
   return { nodes, edges };
 }
@@ -150,7 +220,7 @@ function layoutMind(
 
   // Root node
   const rw = estimateNodeWidth(root.data.text, 0);
-  const rh = estimateNodeHeight(0);
+  const rh = estimateNodeHeight(0, root.data.text, root.data.imageSize);
   allNodes.push({
     id: root.id,
     type: "mindmap",

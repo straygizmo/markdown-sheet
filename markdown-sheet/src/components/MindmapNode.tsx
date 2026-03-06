@@ -87,8 +87,8 @@ function MindmapNode({ id, data, selected }: NodeProps) {
           src={image}
           alt=""
           style={{
-            maxWidth: imageSize?.width || 100,
-            maxHeight: imageSize?.height || 100,
+            width: imageSize?.width || 200,
+            height: imageSize?.height || 200,
           }}
         />
       )}

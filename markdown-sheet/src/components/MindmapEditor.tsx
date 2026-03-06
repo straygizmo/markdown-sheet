@@ -647,13 +647,22 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
       showImageDialog(
         node ? { url: node.data.image, title: "" } : null,
         (url, _title) => {
-          mutateTree((clone) => {
-            const n = findNode(clone, nodeId);
-            if (n) {
-              n.data.image = url;
-              if (!n.data.imageSize) n.data.imageSize = { width: 200, height: 200 };
-            }
-          });
+          const img = new Image();
+          const applyImage = (w: number, h: number) => {
+            const MAX_W = 300;
+            let dw = w, dh = h;
+            if (dw > MAX_W) { dh = Math.round(dh * MAX_W / dw); dw = MAX_W; }
+            mutateTree((clone) => {
+              const n = findNode(clone, nodeId);
+              if (n) {
+                n.data.image = url;
+                n.data.imageSize = { width: dw, height: dh };
+              }
+            });
+          };
+          img.onload = () => applyImage(img.naturalWidth, img.naturalHeight);
+          img.onerror = () => applyImage(200, 200);
+          img.src = url;
         },
       );
     },
