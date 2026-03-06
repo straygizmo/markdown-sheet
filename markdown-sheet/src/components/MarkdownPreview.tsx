@@ -63,8 +63,104 @@ marked.use({
       const id = makeHeadingId(text);
       return `<h${depth} id="${id}">${text}</h${depth}>`;
     },
+    image({ href, title, text }: { href: string; title?: string | null; text: string }) {
+      // Zenn: ![alt](url =250x) → width指定
+      const sizeMatch = href.match(/^(.+?)\s+=(\d*)x(\d*)$/);
+      if (sizeMatch) {
+        const [, url, w, h] = sizeMatch;
+        const attrs = [
+          `src="${url}"`,
+          `alt="${text}"`,
+          w ? `width="${w}"` : "",
+          h ? `height="${h}"` : "",
+          title ? `title="${title}"` : "",
+        ].filter(Boolean).join(" ");
+        return `<img ${attrs} />`;
+      }
+      return `<img src="${href}" alt="${text}"${title ? ` title="${title}"` : ""} />`;
+    },
   },
 });
+
+/**
+ * Zenn 固有記法を HTML に前処理する
+ */
+function preprocessZenn(content: string): string {
+  const lines = content.split("\n");
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // :::message / :::message alert
+    const msgMatch = line.match(/^:{3,}message\s*(alert)?$/);
+    if (msgMatch) {
+      const isAlert = !!msgMatch[1];
+      const cls = isAlert ? "zenn-message zenn-message-alert" : "zenn-message";
+      const inner: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].match(/^:{3,}$/)) {
+        inner.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing :::
+      result.push(`<div class="${cls}">\n\n${inner.join("\n")}\n\n</div>`);
+      continue;
+    }
+
+    // :::details タイトル
+    const detailsMatch = line.match(/^:{3,}details\s+(.+)$/);
+    if (detailsMatch) {
+      const summary = detailsMatch[1];
+      const inner: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].match(/^:{3,}$/)) {
+        inner.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing :::
+      result.push(`<details><summary>${summary}</summary>\n\n${inner.join("\n")}\n\n</details>`);
+      continue;
+    }
+
+    // Code block with filename: ```lang:filename
+    const codeMatch = line.match(/^```(\w+):(.+)$/);
+    if (codeMatch) {
+      const [, lang, filename] = codeMatch;
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing ```
+      const escaped = codeLines.join("\n")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      try {
+        const highlighted = hljs.highlight(codeLines.join("\n"), {
+          language: lang,
+          ignoreIllegals: true,
+        });
+        result.push(
+          `<div class="zenn-code-block"><div class="zenn-code-filename">${filename}</div><pre><code class="hljs language-${lang}">${highlighted.value}</code></pre></div>`
+        );
+      } catch {
+        result.push(
+          `<div class="zenn-code-block"><div class="zenn-code-filename">${filename}</div><pre><code>${escaped}</code></pre></div>`
+        );
+      }
+      continue;
+    }
+
+    result.push(line);
+    i++;
+  }
+
+  return result.join("\n");
+}
 
 /**
  * テーブル行間の余分な空行を除去する（GFM テーブル認識のため）
@@ -181,7 +277,8 @@ const MarkdownPreview: FC<Props> = ({
     try {
       const { meta, body } = extractFrontMatter(content);
       setFrontMatter(meta);
-      const preprocessed = preprocessMath(body);
+      const zennProcessed = preprocessZenn(body);
+      const preprocessed = preprocessMath(zennProcessed);
       const normalized = normalizeTableLines(preprocessed);
       // カウンターをリセットしてから marked を呼ぶ。
       // こうすることで同じ content なら毎回同じ HTML 文字列が生成され、

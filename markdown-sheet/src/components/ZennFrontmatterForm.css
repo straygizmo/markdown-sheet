@@ -1,0 +1,126 @@
+.zenn-fm {
+  background: var(--bg-overlay);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.zenn-fm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.zenn-fm-row:last-child {
+  margin-bottom: 0;
+}
+
+.zenn-fm-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zenn-fm-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 32px;
+}
+
+.zenn-fm-emoji input {
+  width: 36px;
+  text-align: center;
+  font-size: 16px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text);
+}
+
+.zenn-fm-title {
+  flex: 1;
+  min-width: 150px;
+}
+.zenn-fm-title input {
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.zenn-fm select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.zenn-fm-toggle {
+  gap: 6px;
+}
+.zenn-fm-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+.zenn-fm-status {
+  font-size: 11px;
+  font-weight: 600;
+}
+.zenn-fm-status.published {
+  color: #22c55e;
+}
+.zenn-fm-status.draft {
+  color: var(--text-muted);
+}
+
+/* Topics */
+.zenn-fm-topics {
+  flex: 1;
+}
+.zenn-fm-topics-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.zenn-fm-topic-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #3ea8ff22;
+  color: #3ea8ff;
+  border: 1px solid #3ea8ff44;
+  border-radius: 12px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.zenn-fm-topic-tag button {
+  background: none;
+  border: none;
+  color: #3ea8ff;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 0 0 2px;
+  line-height: 1;
+}
+.zenn-fm-topic-tag button:hover {
+  color: #ff4444;
+}
+.zenn-fm-topic-input {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text);
+  padding: 2px 6px;
+  font-size: 11px;
+  width: 100px;
+}

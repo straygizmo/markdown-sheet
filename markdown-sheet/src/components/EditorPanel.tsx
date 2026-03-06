@@ -1,7 +1,8 @@
 import { useEffect } from "react";
-import type { AiSettings } from "../types";
+import type { AiSettings, ZennFrontMatter } from "../types";
 import { MERMAID_TEMPLATES, TRANSFORM_OPTIONS } from "../lib/constants";
 import TableGridSelector from "./TableGridSelector";
+import ZennFrontmatterForm from "./ZennFrontmatterForm";
 
 interface EditorPanelProps {
   content: string;
@@ -39,6 +40,10 @@ interface EditorPanelProps {
   templatePos: { x: number; y: number } | null;
   setTemplatePos: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
   templateBtnRef: React.RefObject<HTMLButtonElement | null>;
+  // Zenn
+  isZennMode?: boolean;
+  zennFrontMatter?: ZennFrontMatter | null;
+  onZennFrontMatterUpdate?: (fm: ZennFrontMatter) => void;
 }
 
 export default function EditorPanel({
@@ -71,6 +76,9 @@ export default function EditorPanel({
   templatePos,
   setTemplatePos,
   templateBtnRef,
+  isZennMode,
+  zennFrontMatter,
+  onZennFrontMatterUpdate,
 }: EditorPanelProps) {
   const aiEnabled = !!aiSettings.apiKey;
 
@@ -214,6 +222,12 @@ export default function EditorPanel({
           </button>
         )}
       </div>
+      {isZennMode && onZennFrontMatterUpdate && (
+        <ZennFrontmatterForm
+          frontMatter={zennFrontMatter ?? null}
+          onUpdate={onZennFrontMatterUpdate}
+        />
+      )}
       <textarea
         ref={editorRef}
         className="editor-textarea"

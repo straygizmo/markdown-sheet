@@ -1,5 +1,5 @@
 import { type FC, useState } from "react";
-import type { FileEntry } from "../types";
+import type { FileEntry, ZennArticleMeta } from "../types";
 import "./FileTree.css";
 
 interface Props {
@@ -20,6 +20,8 @@ interface Props {
   showKmBtn?: boolean;
   showImagesBtn?: boolean;
   onImageDragStart?: (path: string) => void;
+  isZennMode?: boolean;
+  zennArticlesMeta?: Record<string, ZennArticleMeta>;
 }
 
 function getFileIcon(name: string): string {
@@ -39,7 +41,9 @@ const FileTreeNode: FC<{
   onSelectFile: (path: string) => void;
   onImageDragStart?: (path: string) => void;
   depth: number;
-}> = ({ entry, activeFile, onSelectFile, onImageDragStart, depth }) => {
+  isZennMode?: boolean;
+  zennArticlesMeta?: Record<string, ZennArticleMeta>;
+}> = ({ entry, activeFile, onSelectFile, onImageDragStart, depth, isZennMode, zennArticlesMeta }) => {
   const [expanded, setExpanded] = useState(true);
 
   if (entry.is_dir) {
@@ -62,6 +66,8 @@ const FileTreeNode: FC<{
               onSelectFile={onSelectFile}
               onImageDragStart={onImageDragStart}
               depth={depth + 1}
+              isZennMode={isZennMode}
+              zennArticlesMeta={zennArticlesMeta}
             />
           ))}
       </div>
@@ -83,7 +89,18 @@ const FileTreeNode: FC<{
       } : undefined}
     >
       <span className="tree-icon tree-file-icon">{getFileIcon(entry.name) || "·"}</span>
-      <span className="tree-label">{entry.name}</span>
+      {isZennMode && zennArticlesMeta?.[entry.path] ? (
+        <span className="tree-label" title={entry.name}>
+          <span className="zenn-file-emoji">{zennArticlesMeta[entry.path].emoji}</span>
+          {" "}
+          {zennArticlesMeta[entry.path].title || entry.name}
+          {zennArticlesMeta[entry.path].published
+            ? <span className="zenn-published-icon" title="公開中"> ✅</span>
+            : <span className="zenn-draft-icon" title="下書き"> 📝</span>}
+        </span>
+      ) : (
+        <span className="tree-label">{entry.name}</span>
+      )}
     </div>
   );
 };
@@ -106,6 +123,8 @@ const FileTree: FC<Props> = ({
   showKmBtn = true,
   showImagesBtn = false,
   onImageDragStart,
+  isZennMode = false,
+  zennArticlesMeta,
 }) => {
   return (
     <>
@@ -174,6 +193,8 @@ const FileTree: FC<Props> = ({
               onSelectFile={onSelectFile}
               onImageDragStart={onImageDragStart}
               depth={0}
+              isZennMode={isZennMode}
+              zennArticlesMeta={zennArticlesMeta}
             />
           ))
         )}

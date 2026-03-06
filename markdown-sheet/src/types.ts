@@ -65,6 +65,32 @@ export interface AiSettings {
   apiFormat: "openai" | "anthropic" | "azure";
 }
 
+/** Zenn フロントマター */
+export interface ZennFrontMatter {
+  title: string;
+  emoji: string;
+  type: "tech" | "idea";
+  topics: string[];
+  published: boolean;
+  published_at?: string;
+  publication_name?: string;
+}
+
+/** Zenn プロジェクト検出結果 */
+export interface ZennProjectInfo {
+  is_zenn_project: boolean;
+  project_root: string;
+  has_articles: boolean;
+  has_books: boolean;
+}
+
+/** Zenn 記事メタ情報（ファイルツリー表示用） */
+export interface ZennArticleMeta {
+  emoji: string;
+  title: string;
+  published: boolean;
+}
+
 /** エディタタブ1つ分の保存状態 */
 export interface Tab {
   id: string;

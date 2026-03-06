@@ -3,7 +3,7 @@ pub mod file_watcher;
 pub mod markdown_parser;
 pub mod pty_manager;
 
-use commands::{get_file_tree, read_markdown_file, save_markdown_file};
+use commands::{get_file_tree, read_markdown_file, save_markdown_file, detect_zenn_project, get_zenn_articles_meta, git_status, git_add_all, git_commit, git_push};
 use file_watcher::{watch_file, unwatch_file, FileWatcherState};
 use pty_manager::{kill_pty, resize_pty, spawn_pty, write_to_pty, PtyManager};
 use std::sync::{Arc, Mutex};
@@ -24,6 +24,12 @@ pub fn run() {
             write_to_pty,
             resize_pty,
             kill_pty,
+            detect_zenn_project,
+            get_zenn_articles_meta,
+            git_status,
+            git_add_all,
+            git_commit,
+            git_push,
             watch_file,
             unwatch_file,
         ])

@@ -26,6 +26,10 @@ interface Props {
   onToggleEditor: () => void;
   onToggleTerminal: () => void;
   onOpenSettings: () => void;
+  isZennMode: boolean;
+  zennDetected: boolean;
+  onToggleZennMode: () => void;
+  onNewZennArticle?: () => void;
 }
 
 const Toolbar: FC<Props> = ({
@@ -52,6 +56,10 @@ const Toolbar: FC<Props> = ({
   onToggleEditor,
   onToggleTerminal,
   onOpenSettings,
+  isZennMode,
+  zennDetected,
+  onToggleZennMode,
+  onNewZennArticle,
 }) => {
   const [showRecent, setShowRecent] = useState(false);
   const [showRecentFolders, setShowRecentFolders] = useState(false);
@@ -198,6 +206,23 @@ const Toolbar: FC<Props> = ({
         )}
       </div>
       <div className="toolbar-right">
+        {isZennMode && onNewZennArticle && (
+          <button
+            onClick={onNewZennArticle}
+            title="Zenn 新規記事を作成"
+          >
+            + 記事
+          </button>
+        )}
+        {zennDetected && (
+          <button
+            className={`zenn-badge${isZennMode ? " zenn-badge-active" : ""}`}
+            onClick={onToggleZennMode}
+            title={`Zenn モード${isZennMode ? " ON" : " OFF"}`}
+          >
+            Z
+          </button>
+        )}
         <button
           className="settings-btn"
           onClick={onOpenSettings}

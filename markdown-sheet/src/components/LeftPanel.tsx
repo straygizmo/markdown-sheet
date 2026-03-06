@@ -1,6 +1,7 @@
-import type { FileEntry } from "../types";
+import type { FileEntry, ZennArticleMeta } from "../types";
 import FileTree from "./FileTree";
 import OutlinePanel from "./OutlinePanel";
+import ZennPublishPanel from "./ZennPublishPanel";
 
 interface LeftPanelProps {
   leftPanel: "folder" | "outline";
@@ -23,6 +24,11 @@ interface LeftPanelProps {
   showKmBtn: boolean;
   showImagesBtn: boolean;
   onImageDragStart?: (path: string) => void;
+  isZennMode?: boolean;
+  zennArticlesMeta?: Record<string, ZennArticleMeta>;
+  folderPath?: string | null;
+  showToast?: (message: string, isError?: boolean) => void;
+  onRefreshZenn?: () => void;
   // OutlinePanel
   content: string;
   onHeadingClick: (headingId: string) => void;
@@ -48,6 +54,11 @@ export default function LeftPanel({
   showKmBtn,
   showImagesBtn,
   onImageDragStart,
+  isZennMode,
+  zennArticlesMeta,
+  folderPath,
+  showToast,
+  onRefreshZenn,
   content,
   onHeadingClick,
 }: LeftPanelProps) {
@@ -86,9 +97,19 @@ export default function LeftPanel({
           showKmBtn={showKmBtn}
           showImagesBtn={showImagesBtn}
           onImageDragStart={onImageDragStart}
+          isZennMode={isZennMode}
+          zennArticlesMeta={zennArticlesMeta}
         />
       ) : (
         <OutlinePanel content={content} onHeadingClick={onHeadingClick} />
+      )}
+      {isZennMode && folderPath && showToast && onRefreshZenn && (
+        <ZennPublishPanel
+          folderPath={folderPath}
+          showToast={showToast}
+          onRefreshFileTree={onRefresh}
+          onRefreshZenn={onRefreshZenn}
+        />
       )}
     </div>
   );

@@ -179,3 +179,13 @@
   text-align: center;
   font-size: 12px;
 }
+
+/* ========== Zenn ファイルツリー ========== */
+.zenn-file-emoji {
+  font-size: 13px;
+}
+.zenn-published-icon,
+.zenn-draft-icon {
+  font-size: 10px;
+  margin-left: 2px;
+}

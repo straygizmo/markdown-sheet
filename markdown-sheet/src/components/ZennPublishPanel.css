@@ -1,0 +1,107 @@
+.zenn-publish {
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.zenn-publish-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.zenn-publish-refresh {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+.zenn-publish-refresh:hover {
+  background: var(--bg-overlay);
+}
+
+.zenn-publish-status {
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 6px;
+}
+
+.zenn-publish-loading,
+.zenn-publish-empty {
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.zenn-publish-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.zenn-publish-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.zenn-publish-file-status {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: monospace;
+  min-width: 20px;
+  text-align: center;
+}
+.zenn-git-m, .zenn-git-modified { color: #ff9800; }
+.zenn-git-a, .zenn-git-added { color: #4caf50; }
+.zenn-git-d, .zenn-git-deleted { color: #f44336; }
+.zenn-git-r, .zenn-git-renamed { color: #2196f3; }
+.zenn-git-\? { color: #9e9e9e; }
+
+.zenn-publish-file-path {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zenn-publish-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.zenn-publish-message {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.zenn-publish-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 4px;
+  background: #3ea8ff;
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.zenn-publish-btn:hover:not(:disabled) {
+  background: #2196f3;
+}
+.zenn-publish-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

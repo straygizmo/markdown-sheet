@@ -378,3 +378,69 @@
 .md-preview input[type="checkbox"] {
   margin-right: 0.5em;
 }
+
+/* ========== Zenn 固有スタイル ========== */
+
+/* :::message */
+.md-preview .zenn-message {
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin: 16px 0;
+  background: #e8f4fd;
+  border-left: 4px solid #3ea8ff;
+  color: #1a1a1a;
+}
+[data-theme="dark"] .md-preview .zenn-message {
+  background: #1a2d3d;
+  color: #e0e0e0;
+}
+
+/* :::message alert */
+.md-preview .zenn-message-alert {
+  background: #fff3e0;
+  border-left-color: #ff9800;
+}
+[data-theme="dark"] .md-preview .zenn-message-alert {
+  background: #3d2a1a;
+}
+
+/* Code block with filename */
+.md-preview .zenn-code-block {
+  margin: 16px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.md-preview .zenn-code-filename {
+  background: #2d2d2d;
+  color: #aaa;
+  font-size: 12px;
+  padding: 6px 12px;
+  font-family: monospace;
+  border-bottom: 1px solid #444;
+}
+.md-preview .zenn-code-block pre {
+  margin: 0;
+  border-radius: 0;
+}
+
+/* details/summary */
+.md-preview details {
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.md-preview details summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  background: var(--bg-overlay);
+  user-select: none;
+}
+.md-preview details[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.md-preview details > *:not(summary) {
+  padding: 0 14px;
+}

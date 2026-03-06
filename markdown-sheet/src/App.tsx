@@ -5,6 +5,7 @@ import { readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import AiGenerateModal from "./components/AiGenerateModal";
+import ZennNewArticleDialog from "./components/ZennNewArticleDialog";
 import EditorPanel from "./components/EditorPanel";
 import LeftPanel from "./components/LeftPanel";
 import MindmapEditor, { type MindmapEditorHandle } from "./components/MindmapEditor";
@@ -31,7 +32,7 @@ import { useToast } from "./hooks/useToast";
 import { getOfficeExt, getMindmapExt, getImageExt, makeInitialTab, MERMAID_TEMPLATES, TRANSFORM_OPTIONS, MINDMAP_EXTENSIONS } from "./lib/constants";
 import { parseMarkdown, rebuildDocument } from "./lib/markdownParser";
 import type { KityMinderJson } from "./lib/mindmapTypes";
-import type { FileEntry, MarkdownTable, Tab } from "./types";
+import type { FileEntry, MarkdownTable, Tab, ZennProjectInfo, ZennArticleMeta, ZennFrontMatter } from "./types";
 
 type ViewTab = "preview" | "table";
 
@@ -64,6 +65,12 @@ function App() {
   const [leftPanel, setLeftPanel] = useState<"folder" | "outline">("folder");
   const [showSettings, setShowSettings] = useState(false);
 
+  // --- Zenn mode ---
+  const [zennProjectInfo, setZennProjectInfo] = useState<ZennProjectInfo | null>(null);
+  const [isZennMode, setIsZennMode] = useState(false);
+  const [zennArticlesMeta, setZennArticlesMeta] = useState<Record<string, ZennArticleMeta>>({});
+  const [showZennNewArticle, setShowZennNewArticle] = useState(false);
+
   // --- Auto-save ---
   const [autoSave, setAutoSave] = useState(
     () => localStorage.getItem("md-auto-save") !== "false"
@@ -71,6 +78,39 @@ function App() {
   useEffect(() => {
     localStorage.setItem("md-auto-save", String(autoSave));
   }, [autoSave]);
+
+  // --- Zenn プロジェクト検出 ---
+  const detectZennProject = useCallback(async (dirPath: string) => {
+    try {
+      const info = await invoke<ZennProjectInfo>("detect_zenn_project", { dirPath });
+      setZennProjectInfo(info);
+      setIsZennMode(info.is_zenn_project);
+      if (info.is_zenn_project && info.has_articles) {
+        const metas = await invoke<(ZennArticleMeta & { path: string })[]>("get_zenn_articles_meta", { dirPath });
+        const metaMap: Record<string, ZennArticleMeta> = {};
+        for (const m of metas) {
+          metaMap[m.path] = { emoji: m.emoji, title: m.title, published: m.published };
+        }
+        setZennArticlesMeta(metaMap);
+      } else {
+        setZennArticlesMeta({});
+      }
+    } catch {
+      setZennProjectInfo(null);
+      setIsZennMode(false);
+      setZennArticlesMeta({});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (folderPath) {
+      detectZennProject(folderPath);
+    } else {
+      setZennProjectInfo(null);
+      setIsZennMode(false);
+      setZennArticlesMeta({});
+    }
+  }, [folderPath, detectZennProject]);
 
   // --- Office viewer ---
   const [officeFileData, setOfficeFileData] = useState<Uint8Array | null>(null);
@@ -1160,6 +1200,105 @@ function App() {
     [applyContent]
   );
 
+  // --- Zenn frontmatter parsing ---
+  const zennFrontMatter = (() => {
+    if (!isZennMode || !content.startsWith("---\n") && !content.startsWith("---\r\n")) return null;
+    const end = content.indexOf("\n---", 4);
+    if (end === -1) return null;
+    const yaml = content.slice(4, end);
+    const fm: Record<string, string> = {};
+    for (const line of yaml.split("\n")) {
+      const colon = line.indexOf(":");
+      if (colon > 0) {
+        fm[line.slice(0, colon).trim()] = line.slice(colon + 1).trim().replace(/^["']|["']$/g, "");
+      }
+    }
+    // Parse topics array
+    const topicsMatch = yaml.match(/topics:\s*\[([^\]]*)\]/);
+    const topics = topicsMatch
+      ? topicsMatch[1].split(",").map((t) => t.trim().replace(/^["']|["']$/g, "")).filter(Boolean)
+      : [];
+    if (!fm.title && !fm.emoji) return null;
+    return {
+      title: fm.title || "",
+      emoji: fm.emoji || "",
+      type: (fm.type === "idea" ? "idea" : "tech") as "tech" | "idea",
+      topics,
+      published: fm.published === "true",
+      published_at: fm.published_at || undefined,
+      publication_name: fm.publication_name || undefined,
+    } satisfies ZennFrontMatter;
+  })();
+
+  const handleZennFrontMatterUpdate = useCallback(
+    (fm: ZennFrontMatter) => {
+      const topicsStr = fm.topics.length > 0
+        ? `[${fm.topics.map((t) => `"${t}"`).join(", ")}]`
+        : "[]";
+      const lines = [
+        "---",
+        `title: "${fm.title}"`,
+        `emoji: "${fm.emoji}"`,
+        `type: "${fm.type}"`,
+        `topics: ${topicsStr}`,
+        `published: ${fm.published}`,
+      ];
+      if (fm.published_at) lines.push(`published_at: ${fm.published_at}`);
+      if (fm.publication_name) lines.push(`publication_name: "${fm.publication_name}"`);
+      lines.push("---");
+      const newFm = lines.join("\n");
+
+      // Replace existing frontmatter or prepend
+      let body: string;
+      if (content.startsWith("---\n") || content.startsWith("---\r\n")) {
+        const end = content.indexOf("\n---", 4);
+        if (end !== -1) {
+          body = content.slice(end + 4).replace(/^\r?\n/, "");
+        } else {
+          body = content;
+        }
+      } else {
+        body = content;
+      }
+      handleContentChange(newFm + "\n" + body);
+    },
+    [content, handleContentChange]
+  );
+
+  // --- Zenn 新規記事作成 ---
+  const handleCreateZennArticle = useCallback(
+    async (slug: string, title: string, emoji: string, type: "tech" | "idea", topics: string[]) => {
+      if (!folderPath) return;
+      const articlesDir = folderPath.replace(/\\/g, "/") + "/articles";
+      const filePath = articlesDir + "/" + slug + ".md";
+      const topicsStr = topics.length > 0
+        ? `[${topics.map((t) => `"${t}"`).join(", ")}]`
+        : "[]";
+      const content = [
+        "---",
+        `title: "${title}"`,
+        `emoji: "${emoji}"`,
+        `type: "${type}"`,
+        `topics: ${topicsStr}`,
+        "published: false",
+        "---",
+        "",
+        "",
+      ].join("\n");
+      try {
+        await writeTextFile(filePath, content);
+        showToast(`記事を作成しました: ${slug}.md`);
+        setShowZennNewArticle(false);
+        await refreshFileTree();
+        if (folderPath) await detectZennProject(folderPath);
+        loadFile(filePath);
+      } catch (e) {
+        showToast(`記事の作成に失敗しました: ${e}`, true);
+      }
+    },
+    [folderPath, showToast, refreshFileTree, detectZennProject, loadFile]
+  );
+
   // --- Unified undo/redo ---
   const handleUndo = useCallback(() => {
     if (activeViewTab === "table") {
@@ -1593,6 +1732,10 @@ function App() {
         onToggleEditor={() => setEditorVisible((v) => !v)}
         onToggleTerminal={() => setTerminalVisible((v) => !v)}
         onOpenSettings={() => setShowSettings(true)}
+        isZennMode={isZennMode}
+        zennDetected={!!zennProjectInfo?.is_zenn_project}
+        onToggleZennMode={() => setIsZennMode((v) => !v)}
+        onNewZennArticle={() => setShowZennNewArticle(true)}
       />
 
       <TabBar
@@ -1643,6 +1786,11 @@ function App() {
           showKmBtn={showKmBtn}
           showImagesBtn={showImagesBtn}
           onImageDragStart={handleImageDragStart}
+          isZennMode={isZennMode}
+          zennArticlesMeta={zennArticlesMeta}
+          folderPath={folderPath}
+          showToast={showToast}
+          onRefreshZenn={() => { if (folderPath) detectZennProject(folderPath); }}
           content={content}
           onHeadingClick={handleOutlineClick}
         />
@@ -1723,6 +1871,9 @@ function App() {
                   templatePos={templatePos}
                   setTemplatePos={setTemplatePos}
                   templateBtnRef={templateBtnRef}
+                  isZennMode={isZennMode}
+                  zennFrontMatter={zennFrontMatter}
+                  onZennFrontMatterUpdate={handleZennFrontMatterUpdate}
                 />
                 <div className="divider" onMouseDown={handleMouseDown} />
               </>
@@ -1866,6 +2017,13 @@ function App() {
           aiGenerateError={aiGenerateError}
           onGenerate={handleAiGenerateMermaid}
           onClose={() => { setShowAiGenerate(false); setAiGenerateDesc(""); setAiGenerateError(""); }}
+        />
+      )}
+
+      {showZennNewArticle && (
+        <ZennNewArticleDialog
+          onClose={() => setShowZennNewArticle(false)}
+          onCreate={handleCreateZennArticle}
         />
       )}
 
