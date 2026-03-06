@@ -71,7 +71,7 @@ const TabBar: FC<Props> = ({
               title={folder || "保存されていない新規ファイル"}
             >
               <span className="folder-tab-label">
-                {folderName}
+                📁 {folderName}
                 {folderHasDirty[folder] ? " *" : ""}
               </span>
               <button
@@ -107,7 +107,7 @@ const TabBar: FC<Props> = ({
               title={tab.filePath ?? "保存されていない新規ファイル"}
             >
               <span className="tab-label">
-                {name}
+                {name.endsWith(".md") ? "📄 " : name.endsWith(".docx") ? "📘 " : name.match(/\.xls.?$/) ? "📗 " : name.endsWith(".km") ? "💡 " : ""}{name}
                 {tab.dirty ? " *" : ""}
               </span>
               <button
