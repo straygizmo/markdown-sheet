@@ -155,9 +155,10 @@
 }
 
 .tree-file-icon {
-  font-size: 16px;
+  font-size: 13px;
   color: var(--text-muted);
   line-height: 1;
+  width: 18px;
 }
 
 .tree-dir-label {

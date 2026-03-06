@@ -18,6 +18,15 @@ interface Props {
   showKmBtn?: boolean;
 }
 
+function getFileIcon(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".md")) return "📄 ";
+  if (lower.endsWith(".docx")) return "📘 ";
+  if (lower.match(/\.xls.?$/)) return "📗 ";
+  if (lower.endsWith(".km") || lower.endsWith(".xmind")) return "💡 ";
+  return "";
+}
+
 const FileTreeNode: FC<{
   entry: FileEntry;
   activeFile: string | null;
@@ -57,7 +66,7 @@ const FileTreeNode: FC<{
       style={{ paddingLeft: depth * 16 + 8 }}
       onClick={() => onSelectFile(entry.path)}
     >
-      <span className="tree-icon tree-file-icon">·</span>
+      <span className="tree-icon tree-file-icon">{getFileIcon(entry.name) || "·"}</span>
       <span className="tree-label">{entry.name}</span>
     </div>
   );
