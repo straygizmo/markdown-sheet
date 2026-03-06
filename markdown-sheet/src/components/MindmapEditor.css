@@ -216,6 +216,15 @@
   background: #ffebee;
 }
 
+.km-context-menu-disabled {
+  color: #aaa;
+  cursor: default;
+}
+
+.km-context-menu-disabled:hover {
+  background: transparent;
+}
+
 .km-submenu-arrow {
   font-size: 9px;
   margin-left: 12px;

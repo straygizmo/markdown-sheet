@@ -16,8 +16,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import type { KityMinderJson } from "../lib/mindmapTypes";
-import type { MindmapInternalNode } from "../lib/mindmapTypes";
+import type { KityMinderJson, KityMinderNode, MindmapInternalNode } from "../lib/mindmapTypes";
 import { parseXmindFile } from "../lib/xmindParser";
 import { getThemeColors } from "../lib/mindmapThemes";
 import {
@@ -273,6 +272,9 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
   // Note panel
   const [notePanel, setNotePanel] = useState<{ nodeId: string; text: string } | null>(null);
 
+  // Clipboard (app-internal, stores subtree without IDs)
+  const clipboardRef = useRef<KityMinderNode | null>(null);
+
   // Undo/Redo
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
@@ -426,9 +428,10 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
       if (!parent) return null;
       const newId = crypto.randomUUID();
       const childNum = parent.children.length + 1;
+      const isRoot = parent.id === clone.id;
       parent.children.push({
         id: newId,
-        data: { text: `サブトピック ${childNum}` },
+        data: { text: isRoot ? `主トピック ${childNum}` : `サブトピック ${childNum}` },
         children: [],
       });
       setTree(clone);
@@ -450,9 +453,10 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
       const { parent, index } = parentResult;
       const newId = crypto.randomUUID();
       const siblingNum = parent.children.length + 1;
+      const isParentRoot = parent.id === clone.id;
       parent.children.splice(index + 1, 0, {
         id: newId,
-        data: { text: `サブトピック ${siblingNum}` },
+        data: { text: isParentRoot ? `主トピック ${siblingNum}` : `サブトピック ${siblingNum}` },
         children: [],
       });
       setTree(clone);
@@ -662,6 +666,35 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
     [notePanel, mutateTree],
   );
 
+  // --- Copy / Cut / Paste ---
+
+  const handleCopy = useCallback(() => {
+    if (!selectedNodeId || !treeRef.current) return;
+    const node = findNode(treeRef.current, selectedNodeId);
+    if (!node) return;
+    clipboardRef.current = stripIds(node);
+  }, [selectedNodeId]);
+
+  const handleCut = useCallback(() => {
+    if (!selectedNodeId || !treeRef.current) return;
+    if (selectedNodeId === treeRef.current.id) return; // can't cut root
+    const node = findNode(treeRef.current, selectedNodeId);
+    if (!node) return;
+    clipboardRef.current = stripIds(node);
+    deleteNode(selectedNodeId);
+  }, [selectedNodeId, deleteNode]);
+
+  const handlePaste = useCallback(() => {
+    if (!clipboardRef.current || !selectedNodeId || !treeRef.current) return;
+    const clipboard = clipboardRef.current;
+    mutateTree((clone) => {
+      const parent = findNode(clone, selectedNodeId);
+      if (!parent) return;
+      const newChild = assignIds(clipboard);
+      parent.children.push(newChild);
+    });
+  }, [selectedNodeId, mutateTree]);
+
   // --- React Flow event handlers ---
 
   const handleNodeClick = useCallback(
@@ -733,6 +766,21 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
           handleRedo();
           return;
         }
+        if (e.key === "c") {
+          e.preventDefault();
+          handleCopy();
+          return;
+        }
+        if (e.key === "x") {
+          e.preventDefault();
+          handleCut();
+          return;
+        }
+        if (e.key === "v") {
+          e.preventDefault();
+          handlePaste();
+          return;
+        }
       }
 
       if (readOnly) return;
@@ -799,8 +847,8 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [
     readOnly, editingNodeId, selectedNodeId, selectedNodeIds, currentLayout, notePanel,
-    handleSave, handleUndo, handleRedo, startEdit, deleteNode, insertChild, insertSibling,
-    selectNode, mutateTree,
+    handleSave, handleUndo, handleRedo, handleCopy, handleCut, handlePaste,
+    startEdit, deleteNode, insertChild, insertSibling, selectNode, mutateTree,
   ]);
 
   // Close context menu on outside click
@@ -903,6 +951,10 @@ function MindmapEditorInner({ fileData, fileType, filePath, theme, onSave, onDir
             }
           }}
           onDelete={() => { deleteNode(contextMenu.nodeId); setContextMenu(null); }}
+          onCopy={() => { handleCopy(); setContextMenu(null); }}
+          onCut={() => { handleCut(); setContextMenu(null); }}
+          onPaste={() => { handlePaste(); setContextMenu(null); }}
+          hasClipboard={clipboardRef.current !== null}
           onSetPriority={(p) => handleSetPriority(contextMenu.nodeId, p)}
           onSetProgress={(p) => handleSetProgress(contextMenu.nodeId, p)}
           onEditLink={() => handleEditLink(contextMenu.nodeId)}
@@ -1009,6 +1061,10 @@ function ContextMenu({
   onInsertChild,
   onInsertSibling,
   onDelete,
+  onCopy,
+  onCut,
+  onPaste,
+  hasClipboard,
   onSetPriority,
   onSetProgress,
   onEditLink,
@@ -1026,6 +1082,10 @@ function ContextMenu({
   onInsertChild: () => void;
   onInsertSibling: () => void;
   onDelete: () => void;
+  onCopy: () => void;
+  onCut: () => void;
+  onPaste: () => void;
+  hasClipboard: boolean;
   onSetPriority: (p: number) => void;
   onSetProgress: (p: number) => void;
   onEditLink: () => void;
@@ -1052,6 +1112,24 @@ function ContextMenu({
           </div>
         </div>
       </div>
+
+      {/* Copy / Cut / Paste */}
+      <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onCopy(); }}>
+        コピー
+      </div>
+      {!isRoot && (
+        <div className="km-context-menu-item" onMouseDown={(e) => { e.stopPropagation(); onCut(); }}>
+          切り取り
+        </div>
+      )}
+      <div
+        className={`km-context-menu-item${hasClipboard ? "" : " km-context-menu-disabled"}`}
+        onMouseDown={(e) => { e.stopPropagation(); if (hasClipboard) onPaste(); }}
+      >
+        貼り付け
+      </div>
+
+      <div className="km-context-menu-separator" />
 
       {/* Markers */}
       <div className="km-context-menu-item km-has-submenu">
