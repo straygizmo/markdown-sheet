@@ -141,7 +141,8 @@
   margin-left: -2px;
 }
 
-.toolbar button.active-dropdown {
+.toolbar button.active-dropdown,
+.toolbar button.toggle-active {
   background: var(--primary);
   border-color: var(--primary);
   color: white;

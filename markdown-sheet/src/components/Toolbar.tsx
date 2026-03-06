@@ -181,16 +181,18 @@ const Toolbar: FC<Props> = ({
             {/* ===== 表示グループ ===== */}
             <span className="toolbar-group-label">表示</span>
             <button
+              className={editorVisible ? "toggle-active" : ""}
               onClick={onToggleEditor}
               title={`エディタを${editorVisible ? "非表示" : "表示"} (Ctrl+\\)`}
             >
-              {editorVisible ? "◀ エディタ" : "▶ エディタ"}
+              ✍🏼 エディタ
             </button>
             <button
+              className={terminalVisible ? "toggle-active" : ""}
               onClick={onToggleTerminal}
               title={`ターミナルを${terminalVisible ? "非表示" : "表示"} (Ctrl+\`)`}
             >
-              {terminalVisible ? "💻 ▶" : "💻 ◀"}
+              💻 ターミナル
             </button>
           </>
         )}
