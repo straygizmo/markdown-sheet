@@ -23,7 +23,8 @@ function getFileIcon(name: string): string {
   if (lower.endsWith(".md")) return "📄 ";
   if (lower.endsWith(".docx")) return "📘 ";
   if (lower.match(/\.xls.?$/)) return "📗 ";
-  if (lower.endsWith(".km") || lower.endsWith(".xmind")) return "💡 ";
+  if (lower.endsWith(".km")) return "💡 ";
+  if (lower.endsWith(".xmind")) return "📕 ";
   return "";
 }
 

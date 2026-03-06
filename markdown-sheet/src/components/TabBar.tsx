@@ -107,7 +107,7 @@ const TabBar: FC<Props> = ({
               title={tab.filePath ?? "保存されていない新規ファイル"}
             >
               <span className="tab-label">
-                {name.endsWith(".md") ? "📄 " : name.endsWith(".docx") ? "📘 " : name.match(/\.xls.?$/) ? "📗 " : name.endsWith(".km") ? "💡 " : ""}{name}
+                {name.endsWith(".md") ? "📄 " : name.endsWith(".docx") ? "📘 " : name.match(/\.xls.?$/) ? "📗 " : name.endsWith(".km") ? "💡 " : name.endsWith(".xmind") ? "📕 " : ""}{name}
                 {tab.dirty ? " *" : ""}
               </span>
               <button
