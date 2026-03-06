@@ -267,6 +267,40 @@ function App() {
         setActiveFolderPath(newActive.folderPath);
         getCurrentWindow().setTitle(newActive.folderPath ? `Markdown Studio : ${newActive.folderPath}` : "Markdown Studio");
         folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
+
+        // Office/Mindmap 状態を切り替え先タブに合わせて更新
+        const officeExt = newActive.filePath ? getOfficeExt(newActive.filePath) : null;
+        const mmExt = newActive.filePath ? getMindmapExt(newActive.filePath) : null;
+        if (officeExt && newActive.filePath) {
+          readFile(newActive.filePath)
+            .then((bytes) => {
+              setOfficeFileData(new Uint8Array(bytes));
+              setOfficeFileType(officeExt);
+              setMindmapFileData(null);
+              setMindmapFileType(null);
+            })
+            .catch(() => {
+              setOfficeFileData(null);
+              setOfficeFileType(null);
+            });
+        } else if (mmExt && newActive.filePath) {
+          readFile(newActive.filePath)
+            .then((bytes) => {
+              setMindmapFileData(new Uint8Array(bytes));
+              setMindmapFileType(mmExt);
+              setOfficeFileData(null);
+              setOfficeFileType(null);
+            })
+            .catch(() => {
+              setMindmapFileData(null);
+              setMindmapFileType(null);
+            });
+        } else {
+          setOfficeFileData(null);
+          setOfficeFileType(null);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
+        }
       }
 
       setTabs(remaining);
@@ -335,6 +369,40 @@ function App() {
         setActiveFolderPath(newActive.folderPath);
         getCurrentWindow().setTitle(newActive.folderPath ? `Markdown Studio : ${newActive.folderPath}` : "Markdown Studio");
         folderLastActiveTabRef.current[newActive.folderPath] = newActive.id;
+
+        // Office/Mindmap 状態を切り替え先タブに合わせて更新
+        const officeExt = newActive.filePath ? getOfficeExt(newActive.filePath) : null;
+        const mmExt = newActive.filePath ? getMindmapExt(newActive.filePath) : null;
+        if (officeExt && newActive.filePath) {
+          readFile(newActive.filePath)
+            .then((bytes) => {
+              setOfficeFileData(new Uint8Array(bytes));
+              setOfficeFileType(officeExt);
+              setMindmapFileData(null);
+              setMindmapFileType(null);
+            })
+            .catch(() => {
+              setOfficeFileData(null);
+              setOfficeFileType(null);
+            });
+        } else if (mmExt && newActive.filePath) {
+          readFile(newActive.filePath)
+            .then((bytes) => {
+              setMindmapFileData(new Uint8Array(bytes));
+              setMindmapFileType(mmExt);
+              setOfficeFileData(null);
+              setOfficeFileType(null);
+            })
+            .catch(() => {
+              setMindmapFileData(null);
+              setMindmapFileType(null);
+            });
+        } else {
+          setOfficeFileData(null);
+          setOfficeFileType(null);
+          setMindmapFileData(null);
+          setMindmapFileType(null);
+        }
       }
 
       delete folderLastActiveTabRef.current[folder];
