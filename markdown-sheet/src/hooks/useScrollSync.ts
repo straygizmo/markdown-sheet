@@ -35,6 +35,10 @@ export function useScrollSync(
 
     const syncFromPreview = () => {
       if (isSyncingRef.current) return;
+      // MarkdownPreview が innerHTML を更新中は preview→editor 同期をスキップする。
+      // innerHTML 全置換で scrollHeight が変わり scrollTop がクランプされると
+      // scroll イベントが発火し、エディタのスクロールが微妙にずれる問題を防ぐ。
+      if (preview.dataset.contentUpdating) return;
       isSyncingRef.current = true;
       const ratio = preview.scrollTop / Math.max(preview.scrollHeight - preview.clientHeight, 1);
       editor.scrollTop = ratio * (editor.scrollHeight - editor.clientHeight);

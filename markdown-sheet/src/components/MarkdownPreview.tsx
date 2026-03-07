@@ -93,11 +93,11 @@ function preprocessZenn(content: string): string {
   while (i < lines.length) {
     const line = lines[i];
 
-    // :::message / :::message alert
-    const msgMatch = line.match(/^:{3,}message\s*(alert)?$/);
+    // :::message / :::message alert / :::message success / :::message warning
+    const msgMatch = line.match(/^:{3,}message\s*(\w*)$/);
     if (msgMatch) {
-      const isAlert = !!msgMatch[1];
-      const cls = isAlert ? "zenn-message zenn-message-alert" : "zenn-message";
+      const type = msgMatch[1]; // "", "alert", "success", "warning", etc.
+      const cls = type ? `zenn-message zenn-message-${type}` : "zenn-message";
       const inner: string[] = [];
       i++;
       while (i < lines.length && !lines[i].match(/^:{3,}$/)) {
@@ -305,7 +305,16 @@ const MarkdownPreview: FC<Props> = ({
 
     const div = mdContentRef.current;
     if (!div) return;
+
+    // innerHTML 全置換中は preview→editor のスクロール同期を抑制するフラグを立てる。
+    // scrollHeight が変わり scrollTop がクランプされると scroll イベントが発火し、
+    // useScrollSync 経由でエディタのスクロールが微妙にずれる問題を防ぐ。
+    const scrollContainer = ref.current;
+    if (scrollContainer) scrollContainer.dataset.contentUpdating = "1";
     div.innerHTML = html;
+    requestAnimationFrame(() => {
+      if (scrollContainer) delete scrollContainer.dataset.contentUpdating;
+    });
 
     if (!filePath) return;
     const dir = filePath.replace(/[\\/][^\\/]+$/, "");
