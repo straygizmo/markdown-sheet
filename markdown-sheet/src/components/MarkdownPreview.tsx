@@ -155,7 +155,21 @@ function preprocessZenn(content: string): string {
       continue;
     }
 
-    result.push(line);
+    // Zenn 画像サイズ構文: ![alt](url =WxH) → <img> タグに変換
+    // marked は URL 内のスペースで href を切るため、前処理で HTML に変換する
+    const imgLine = line.replace(
+      /!\[([^\]]*)\]\((.+?)\s+=(\d*)x(\d*)\)/g,
+      (_match, alt: string, url: string, w: string, h: string) => {
+        const attrs = [
+          `src="${url}"`,
+          `alt="${alt}"`,
+          w ? `width="${w}"` : "",
+          h ? `height="${h}"` : "",
+        ].filter(Boolean).join(" ");
+        return `<p><img ${attrs} /></p>`;
+      }
+    );
+    result.push(imgLine);
     i++;
   }
 
