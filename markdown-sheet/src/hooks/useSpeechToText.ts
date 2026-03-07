@@ -11,6 +11,20 @@ interface UseSpeechToTextReturn {
 
 const MODEL_ID = "moonshine-tiny-ja";
 
+/** Remove spaces between Japanese characters (CJK, hiragana, katakana, punctuation) */
+function removeJapaneseSpaces(text: string): string {
+  const jaRegex =
+    /([\u3000-\u9FFF\uF900-\uFAFF\u{20000}-\u{2FA1F}])\s+([\u3000-\u9FFF\uF900-\uFAFF\u{20000}-\u{2FA1F}])/gu;
+  let result = text;
+  // Apply repeatedly to handle consecutive single-char matches (overlapping pairs)
+  let prev = "";
+  while (prev !== result) {
+    prev = result;
+    result = result.replace(jaRegex, "$1$2");
+  }
+  return result;
+}
+
 let pipelineCache: {
   processor: any;
   tokenizer: any;
@@ -61,6 +75,21 @@ export function useSpeechToText(
   const SILENCE_THRESHOLD = 0.01;
   const SILENCE_FRAMES_TO_COMMIT = 30; // ~0.5s of silence at ~60fps
   const TRANSCRIBE_INTERVAL_MS = 2000;
+  const MIN_RMS_FOR_SPEECH = 0.01; // Skip transcription if overall RMS is below this
+
+  /** Return true if the audio buffer has enough energy to be speech */
+  const hasSpeechEnergy = (chunks: Float32Array[]): boolean => {
+    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+    if (totalLength === 0) return false;
+    let sumSq = 0;
+    for (const chunk of chunks) {
+      for (let i = 0; i < chunk.length; i++) {
+        sumSq += chunk[i] * chunk[i];
+      }
+    }
+    const rms = Math.sqrt(sumSq / totalLength);
+    return rms >= MIN_RMS_FOR_SPEECH;
+  };
 
   const transcribeBuffer = useCallback(async () => {
     if (audioBufferRef.current.length === 0) return;
@@ -68,6 +97,7 @@ export function useSpeechToText(
     const chunks = audioBufferRef.current;
     const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
     if (totalLength < SAMPLE_RATE * 0.3) return; // Skip if less than 0.3s
+    if (!hasSpeechEnergy(chunks)) return; // Skip silence/noise
 
     const merged = new Float32Array(totalLength);
     let offset = 0;
@@ -82,7 +112,7 @@ export function useSpeechToText(
       const maxLength = Math.max(64, Math.trunc((totalLength / SAMPLE_RATE) * 13));
       const outputs = await pipeline.model.generate({ ...inputs, max_length: maxLength });
       const decoded = pipeline.tokenizer.batch_decode(outputs, { skip_special_tokens: true });
-      const text = (decoded[0] || "").trim();
+      const text = removeJapaneseSpaces((decoded[0] || "").trim());
       if (text) {
         setInterimText(text);
       }
@@ -98,6 +128,7 @@ export function useSpeechToText(
     audioBufferRef.current = [];
     const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
     if (totalLength < SAMPLE_RATE * 0.3) return;
+    if (!hasSpeechEnergy(chunks)) return; // Skip silence/noise
 
     const merged = new Float32Array(totalLength);
     let offset = 0;
@@ -113,7 +144,7 @@ export function useSpeechToText(
       const maxLength = Math.max(64, Math.trunc((totalLength / SAMPLE_RATE) * 13));
       const outputs = await pipeline.model.generate({ ...inputs, max_length: maxLength });
       const decoded = pipeline.tokenizer.batch_decode(outputs, { skip_special_tokens: true });
-      const text = (decoded[0] || "").trim();
+      const text = removeJapaneseSpaces((decoded[0] || "").trim());
       if (text) {
         onTranscribed(text);
       }
