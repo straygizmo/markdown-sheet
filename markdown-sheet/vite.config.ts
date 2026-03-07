@@ -20,6 +20,7 @@ export default defineConfig(async () => ({
       "@tauri-apps/api",
       "@tauri-apps/plugin-dialog",
       "@tauri-apps/plugin-fs",
+      "onnxruntime-web",
     ],
   },
 }));

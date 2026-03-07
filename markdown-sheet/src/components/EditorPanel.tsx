@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import type { AiSettings, ZennFrontMatter } from "../types";
 import { MERMAID_TEMPLATES, TRANSFORM_OPTIONS } from "../lib/constants";
+import { useSpeechToText } from "../hooks/useSpeechToText";
 import TableGridSelector from "./TableGridSelector";
 import ZennFrontmatterForm from "./ZennFrontmatterForm";
 
@@ -81,6 +82,24 @@ export default function EditorPanel({
   onZennFrontMatterUpdate,
 }: EditorPanelProps) {
   const aiEnabled = !!aiSettings.apiKey;
+
+  const handleSttTranscribed = useCallback((text: string) => {
+    const textarea = editorRef.current;
+    if (!textarea) return;
+    const pos = textarea.selectionStart;
+    const before = content.slice(0, pos);
+    const after = content.slice(pos);
+    onContentChange(before + text + after);
+    // Move cursor after inserted text
+    requestAnimationFrame(() => {
+      const newPos = pos + text.length;
+      textarea.selectionStart = newPos;
+      textarea.selectionEnd = newPos;
+      textarea.focus();
+    });
+  }, [content, editorRef, onContentChange]);
+
+  const stt = useSpeechToText(handleSttTranscribed, showToast);
 
   return (
     <div
@@ -209,6 +228,29 @@ export default function EditorPanel({
         >
           AI図生成
         </button>
+        <span className="ai-bar__sep" />
+        {/* 音声入力 (Moonshine - オフライン) */}
+        <button
+          className={`ai-bar__btn${stt.status === "recording" ? " ai-bar__btn--recording" : ""}${stt.status === "loading" || stt.status === "transcribing" ? " ai-bar__btn--busy" : ""}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            stt.toggle();
+          }}
+          title={
+            stt.status === "idle" ? "音声入力を開始（オフライン・日本語）" :
+            stt.status === "loading" ? "モデル読み込み中..." :
+            stt.status === "recording" ? "クリックで音声入力を停止" :
+            "文字起こし中..."
+          }
+          disabled={stt.status === "loading"}
+        >
+          {stt.status === "recording" ? "⏹ 停止" : stt.status === "loading" ? "読込中..." : stt.status === "transcribing" ? "認識中..." : "🎤 音声"}
+        </button>
+        {stt.interimText && (
+          <span className="ai-bar__stt-interim" title="認識中のテキスト（確定前）">
+            {stt.interimText.length > 20 ? stt.interimText.slice(0, 20) + "..." : stt.interimText}
+          </span>
+        )}
         {!aiEnabled && (
           <button
             className="ai-bar__setup-hint"

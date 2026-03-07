@@ -17,6 +17,7 @@ Tauri 2 + React 製の Windows デスクトップ向け Markdown エディタ。
 - **テーマ** — ライト / ダーク切替
 - **エディタ非表示** — プレビュー専用モードへ切替（Ctrl+\）
 - **Undo / Redo** — テーブル編集の操作履歴
+- **完全オフラインの日本語音声入力** — Moonshine tiny-ja モデルによるブラウザ内音声認識、APIキー・ネットワーク不要
 
 ## 開発環境セットアップ
 
@@ -46,6 +47,7 @@ npm run tauri build
 | 図ダイアグラム         | Mermaid v11        |
 | シンタックスハイライト | highlight.js       |
 | PDF 出力               | html2pdf.js        |
+| 音声入力               | Moonshine tiny-ja (ONNX) + Transformers.js |
 
 ## キーボードショートカット
 
@@ -188,3 +190,4 @@ graph TD
 
 - [vscode-office](https://github.com/cweijan/vscode-office) — Office ファイルプレビュー機能の参考
 - [markdown-viewer-extension](https://github.com/nicedoc/markdown-viewer-extension) — DOCXエクスポート機能の参考
+- [Moonshine](https://github.com/moonshine-ai/moonshine) — オフライン日本語音声認識モデル (moonshine-tiny-ja)
