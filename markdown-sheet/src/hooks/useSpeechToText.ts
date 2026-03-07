@@ -144,8 +144,11 @@ export function useSpeechToText(
       const maxLength = Math.max(64, Math.trunc((totalLength / SAMPLE_RATE) * 13));
       const outputs = await pipeline.model.generate({ ...inputs, max_length: maxLength });
       const decoded = pipeline.tokenizer.batch_decode(outputs, { skip_special_tokens: true });
-      const text = removeJapaneseSpaces((decoded[0] || "").trim());
+      let text = removeJapaneseSpaces((decoded[0] || "").trim());
       if (text) {
+        if (!text.endsWith("。")) {
+          text += "。";
+        }
         onTranscribed(text);
       }
     } catch (err) {
