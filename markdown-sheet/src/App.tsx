@@ -1985,7 +1985,7 @@ function App() {
                 <span>ターミナル</span>
               </div>
               <Terminal
-                cwd={activeFile ? activeFile.replace(/[\\/][^\\/]*$/, "") : folderPath ?? "C:\\"}
+                cwd={folderPath ?? "C:\\"}
                 visible={terminalVisible}
                 theme={theme}
               />

@@ -167,17 +167,6 @@ export default function Terminal({ cwd, visible, theme }: Props) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Restart PTY when cwd changes
-  const prevCwdRef = useRef(cwd);
-  useEffect(() => {
-    if (prevCwdRef.current === cwd) return;
-    prevCwdRef.current = cwd;
-    if (xtermRef.current) {
-      xtermRef.current.clear();
-      spawnPty(xtermRef.current);
-    }
-  }, [cwd]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Theme update
   useEffect(() => {
     if (xtermRef.current) {
