@@ -299,18 +299,91 @@ pub fn git_add_all(dir_path: String) -> Result<(), String> {
 }
 
 /// git commit -m "message"
+/// For Zenn projects, temporarily replaces ../images/ with /images/ in .md files before committing,
+/// then restores the original content after the commit.
 #[tauri::command]
 pub fn git_commit(dir_path: String, message: String) -> Result<(), String> {
+    // Collect .md files and replace ../images/ -> /images/ for Zenn deploy
+    let originals = fix_image_paths_for_zenn(&dir_path);
+
+    // Re-stage after modifications
+    if !originals.is_empty() {
+        let add_output = Command::new("git")
+            .args(["add", "."])
+            .current_dir(&dir_path)
+            .output()
+            .map_err(|e| {
+                restore_originals(&originals);
+                format!("git add 失敗: {}", e)
+            })?;
+        if !add_output.status.success() {
+            restore_originals(&originals);
+            return Err(String::from_utf8_lossy(&add_output.stderr).to_string());
+        }
+    }
+
     let output = Command::new("git")
         .args(["commit", "-m", &message])
         .current_dir(&dir_path)
         .output()
-        .map_err(|e| format!("git commit 失敗: {}", e))?;
+        .map_err(|e| {
+            restore_originals(&originals);
+            format!("git commit 失敗: {}", e)
+        })?;
+
+    // Always restore original files
+    restore_originals(&originals);
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
     Ok(())
+}
+
+/// Find all .md files recursively and replace ../images/ with /images/.
+/// Returns Vec of (path, original_content) for restoration.
+fn fix_image_paths_for_zenn(dir_path: &str) -> Vec<(std::path::PathBuf, String)> {
+    let mut originals = Vec::new();
+    let dir = Path::new(dir_path);
+    if let Ok(entries) = glob_md_files(dir) {
+        for path in entries {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if content.contains("../images/") {
+                    let fixed = content.replace("../images/", "/images/");
+                    if fs::write(&path, &fixed).is_ok() {
+                        originals.push((path, content));
+                    }
+                }
+            }
+        }
+    }
+    originals
+}
+
+/// Recursively collect .md files
+fn glob_md_files(dir: &Path) -> Result<Vec<std::path::PathBuf>, std::io::Error> {
+    let mut results = Vec::new();
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if let Ok(mut sub) = glob_md_files(&path) {
+                    results.append(&mut sub);
+                }
+            } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                results.push(path);
+            }
+        }
+    }
+    Ok(results)
+}
+
+/// Restore original file contents
+fn restore_originals(originals: &[(std::path::PathBuf, String)]) {
+    for (path, content) in originals {
+        let _ = fs::write(path, content);
+    }
 }
 
 /// git remote get-url origin
