@@ -15,7 +15,12 @@
       "Bash(npx vite:*)",
       "Bash(ls:*)",
       "Bash(npx grunt:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(gh issue:*)",
+      "Bash(curl:*)",
+      "Bash(node:*)",
+      "Bash(where:*)",
+      "Bash(uv:*)"
     ]
   }
 }

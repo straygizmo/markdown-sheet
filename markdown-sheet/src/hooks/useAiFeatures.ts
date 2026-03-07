@@ -127,6 +127,52 @@ export function useAiFeatures({
     [handleContentChange, editorRef, contentRef]
   );
 
+  // --- Feature 4: AI instruction (Zenn mode) ---
+  const [aiInstructing, setAiInstructing] = useState(false);
+
+  const handleAiInstruct = useCallback(
+    async (instruction: string) => {
+      if (!aiSettings.apiKey) {
+        showToast("APIキーが設定されていません", true);
+        return;
+      }
+      if (!instruction.trim()) return;
+      setAiInstructing(true);
+      try {
+        const systemPrompt =
+          "あなたはZenn (zenn.dev) 記事のMarkdown編集アシスタントです。ユーザーの指示に従って、与えられたMarkdown本文を編集・加筆・修正してください。\n" +
+          "結果はMarkdown本文のみを返してください。説明やコードブロック囲みは不要です。\n\n" +
+          "## Zenn記事のルール\n" +
+          "- フロントマター(---で囲まれたYAML部分)は必須です。必ずそのまま残してください。指示がある場合のみ編集してください。\n" +
+          "  フロントマターの形式:\n" +
+          "  ---\n" +
+          "  title: \"記事タイトル\"\n" +
+          "  emoji: \"🚀\"\n" +
+          "  type: \"tech\"  # tech or idea\n" +
+          "  topics: [\"python\", \"automation\"]\n" +
+          "  published: true  # false = 下書き\n" +
+          "  ---\n\n" +
+          "## Zenn独自の記法（積極的に活用してください）\n" +
+          "- メッセージボックス: :::message ... ::: または :::message alert ... :::\n" +
+          "- アコーディオン: :::details タイトル ... :::\n" +
+          "- コードブロックにファイル名: ```python:main.py\n" +
+          "- diffハイライト: ```diff python\n" +
+          "- 数式(KaTeX): $ E = mc^2 $\n" +
+          "- Mermaid図: ```mermaid ... ```\n" +
+          "- リンクカード: URLを単独の行に置くだけで自動展開\n" +
+          "- 画像サイズ指定: ![alt](url =250x) — =〇〇x でpx幅指定\n";
+        const result = await callAI(aiSettings, systemPrompt, `## 指示\n${instruction}\n\n## 現在の本文\n${contentRef.current}`);
+        handleContentChange(result);
+        showToast("AIが記事を更新しました");
+      } catch (err) {
+        showToast(`AI指示失敗: ${err instanceof Error ? err.message : String(err)}`, true);
+      } finally {
+        setAiInstructing(false);
+      }
+    },
+    [aiSettings, handleContentChange, contentRef, showToast]
+  );
+
   // --- Mermaid block update (from preview AI) ---
   const handleUpdateMermaidBlock = useCallback(
     (blockIndex: number, newSource: string) => {
@@ -164,6 +210,9 @@ export function useAiFeatures({
     templatePos, setTemplatePos,
     templateBtnRef,
     handleInsertTemplate,
+    // Feature 4
+    aiInstructing,
+    handleAiInstruct,
     // Mermaid block
     handleUpdateMermaidBlock,
   } as const;

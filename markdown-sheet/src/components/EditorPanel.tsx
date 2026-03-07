@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiSettings, ZennFrontMatter } from "../types";
 import { MERMAID_TEMPLATES, TRANSFORM_OPTIONS } from "../lib/constants";
 import { useSpeechToText } from "../hooks/useSpeechToText";
@@ -45,6 +45,9 @@ interface EditorPanelProps {
   isZennMode?: boolean;
   zennFrontMatter?: ZennFrontMatter | null;
   onZennFrontMatterUpdate?: (fm: ZennFrontMatter) => void;
+  // AI instruction (Zenn mode)
+  onAiInstruct?: (instruction: string) => void;
+  aiInstructing?: boolean;
 }
 
 export default function EditorPanel({
@@ -80,8 +83,20 @@ export default function EditorPanel({
   isZennMode,
   zennFrontMatter,
   onZennFrontMatterUpdate,
+  onAiInstruct,
+  aiInstructing,
 }: EditorPanelProps) {
   const aiEnabled = !!aiSettings.apiKey;
+
+  // AI instruction textbox state (Zenn mode)
+  const [instructionText, setInstructionText] = useState("");
+  const instructionRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleInstructSttTranscribed = useCallback((text: string) => {
+    setInstructionText((prev) => prev + text);
+  }, []);
+
+  const instructStt = useSpeechToText(handleInstructSttTranscribed, showToast);
 
   const handleSttTranscribed = useCallback((text: string) => {
     const textarea = editorRef.current;
@@ -100,6 +115,18 @@ export default function EditorPanel({
   }, [content, editorRef, onContentChange]);
 
   const stt = useSpeechToText(handleSttTranscribed, showToast);
+
+  // Ctrl+Space で音声入力の On/Off を切り替え
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey && e.code === "Space") {
+        e.preventDefault();
+        stt.toggle();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [stt.toggle]);
 
   return (
     <div
@@ -237,7 +264,7 @@ export default function EditorPanel({
             stt.toggle();
           }}
           title={
-            stt.status === "idle" ? "音声入力を開始（オフライン・日本語）" :
+            stt.status === "idle" ? "音声入力を開始（オフライン・日本語） [Ctrl+Space]" :
             stt.status === "loading" ? "モデル読み込み中..." :
             stt.status === "recording" ? "クリックで音声入力を停止" :
             "文字起こし中..."
@@ -277,6 +304,58 @@ export default function EditorPanel({
         onChange={(e) => onContentChange(e.target.value)}
         placeholder="Markdownを入力するか、ファイルを開いてください..."
       />
+      {isZennMode && onAiInstruct && (
+        <div className="ai-instruct-bar">
+          <textarea
+            ref={instructionRef}
+            className="ai-instruct-bar__input"
+            value={instructionText}
+            onChange={(e) => setInstructionText(e.target.value)}
+            placeholder="AIへの指示を入力（例：文章を校正して、見出しを追加して...）"
+            disabled={aiInstructing}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                if (instructionText.trim() && !aiInstructing) {
+                  onAiInstruct(instructionText.trim());
+                  setInstructionText("");
+                }
+              }
+            }}
+          />
+          <div className="ai-instruct-bar__actions">
+            <button
+              className={`ai-instruct-bar__mic${instructStt.status === "recording" ? " ai-instruct-bar__mic--recording" : ""}${instructStt.status === "loading" || instructStt.status === "transcribing" ? " ai-instruct-bar__mic--busy" : ""}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                instructStt.toggle();
+              }}
+              title={
+                instructStt.status === "idle" ? "音声入力" :
+                instructStt.status === "recording" ? "停止" :
+                instructStt.status === "loading" ? "読込中..." : "認識中..."
+              }
+              disabled={instructStt.status === "loading" || aiInstructing}
+            >
+              {instructStt.status === "recording" ? "⏹" : instructStt.status === "loading" ? "..." : instructStt.status === "transcribing" ? "..." : "🎤"}
+            </button>
+            <button
+              className={`ai-instruct-bar__send${aiInstructing ? " ai-instruct-bar__send--busy" : ""}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (instructionText.trim() && !aiInstructing) {
+                  onAiInstruct(instructionText.trim());
+                  setInstructionText("");
+                }
+              }}
+              disabled={!instructionText.trim() || aiInstructing || !aiEnabled}
+              title={aiEnabled ? "AIに指示を送信 (Ctrl+Enter)" : "APIキーが未設定です"}
+            >
+              {aiInstructing ? "処理中..." : "送信"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

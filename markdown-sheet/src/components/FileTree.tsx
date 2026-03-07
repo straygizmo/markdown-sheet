@@ -90,7 +90,9 @@ const FileTreeNode: FC<{
         }
       } : undefined}
     >
-      <span className="tree-icon tree-file-icon">{getFileIcon(entry.name) || "·"}</span>
+      {!(isZennMode && zennArticlesMeta?.[entry.path]) && (
+        <span className="tree-icon tree-file-icon">{getFileIcon(entry.name) || "·"}</span>
+      )}
       {isZennMode && zennArticlesMeta?.[entry.path] ? (
         <span className="tree-label" title={entry.name}>
           <span className="zenn-file-emoji">{zennArticlesMeta[entry.path].emoji}</span>

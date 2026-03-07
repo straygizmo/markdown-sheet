@@ -1269,23 +1269,23 @@ function App() {
   );
 
   // --- Zenn プロジェクト初期化 ---
-  const handleInitZenn = useCallback(async () => {
+  const [showZennInitConfirm, setShowZennInitConfirm] = useState(false);
+
+  const handleInitZennClick = useCallback(() => {
     if (!folderPath) {
       showToast("先にフォルダを開いてください", true);
       return;
     }
     if (zennProjectInfo?.is_zenn_project) {
-      window.alert("このフォルダは既にZennプロジェクト用に初期化されています");
+      showToast("このフォルダは既にZennプロジェクト用に初期化されています");
       return;
     }
-    const ok = window.confirm(
-      "このフォルダを Zenn プロジェクトとして初期化します。\n\n" +
-      "初期化では以下を行います:\n" +
-      "・articles / books / images フォルダの作成\n" +
-      "・git init の実行\n\n" +
-      "よろしいですか？"
-    );
-    if (!ok) return;
+    setShowZennInitConfirm(true);
+  }, [folderPath, zennProjectInfo, showToast]);
+
+  const handleInitZennConfirm = useCallback(async () => {
+    setShowZennInitConfirm(false);
+    if (!folderPath) return;
     try {
       const base = folderPath.replace(/\\/g, "/");
       await mkdir(base + "/articles", { recursive: true });
@@ -1298,7 +1298,7 @@ function App() {
     } catch (e) {
       showToast(`Zenn 初期化に失敗しました: ${e}`, true);
     }
-  }, [folderPath, zennProjectInfo, showToast, refreshFileTree, detectZennProject]);
+  }, [folderPath, showToast, refreshFileTree, detectZennProject]);
 
   // --- Zenn 新規記事作成 ---
   const handleCreateZennArticle = useCallback(
@@ -1463,6 +1463,8 @@ function App() {
     templatePos, setTemplatePos,
     templateBtnRef,
     handleInsertTemplate,
+    aiInstructing,
+    handleAiInstruct,
     handleUpdateMermaidBlock,
   } = useAiFeatures({
     editorRef,
@@ -1825,7 +1827,7 @@ function App() {
           showToast={showToast}
           onRefreshZenn={() => { if (folderPath) detectZennProject(folderPath); }}
           showZennBtn={showZennBtn}
-          onInitZenn={handleInitZenn}
+          onInitZenn={handleInitZennClick}
           content={content}
           onHeadingClick={handleOutlineClick}
         />
@@ -1909,6 +1911,8 @@ function App() {
                   isZennMode={isZennMode}
                   zennFrontMatter={zennFrontMatter}
                   onZennFrontMatterUpdate={handleZennFrontMatterUpdate}
+                  onAiInstruct={handleAiInstruct}
+                  aiInstructing={aiInstructing}
                 />
                 <div className="divider" onMouseDown={handleMouseDown} />
               </>
@@ -2060,6 +2064,39 @@ function App() {
           onClose={() => setShowZennNewArticle(false)}
           onCreate={handleCreateZennArticle}
         />
+      )}
+
+      {showZennInitConfirm && (
+        <div className="ai-gen-overlay" onClick={() => setShowZennInitConfirm(false)}>
+          <div className="ai-gen-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="ai-gen-header">
+              <span className="ai-gen-title">Zenn プロジェクト初期化</span>
+              <button className="settings-close" onClick={() => setShowZennInitConfirm(false)}>✕</button>
+            </div>
+            <div style={{ padding: "16px", fontSize: 13, lineHeight: 1.8 }}>
+              <p>このフォルダを Zenn プロジェクトとして初期化します。</p>
+              <p style={{ marginTop: 8 }}>初期化では以下を行います:</p>
+              <ul style={{ margin: "4px 0 12px 20px" }}>
+                <li>articles / books / images フォルダの作成</li>
+                <li>git init の実行</li>
+              </ul>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setShowZennInitConfirm(false)}
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-surface)", color: "var(--text)", cursor: "pointer", fontSize: 13 }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleInitZennConfirm}
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#3ea8ff", color: "white", fontWeight: 600, cursor: "pointer", fontSize: 13 }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Toast */}

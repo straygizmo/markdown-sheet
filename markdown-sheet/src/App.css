@@ -476,6 +476,106 @@ body {
   max-width: 160px;
 }
 
+/* ========== AI Instruction Bar (Zenn mode) ========== */
+.ai-instruct-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-overlay);
+  flex-shrink: 0;
+}
+
+.ai-instruct-bar__input {
+  flex: 1;
+  min-height: 36px;
+  max-height: 80px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-main);
+  line-height: 1.4;
+  resize: vertical;
+  outline: none;
+}
+
+.ai-instruct-bar__input:focus {
+  border-color: var(--primary);
+}
+
+.ai-instruct-bar__input:disabled {
+  opacity: 0.5;
+}
+
+.ai-instruct-bar__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ai-instruct-bar__mic {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.ai-instruct-bar__mic:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.ai-instruct-bar__mic--recording {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+  animation: stt-pulse 1.2s ease-in-out infinite;
+}
+
+.ai-instruct-bar__mic--busy {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.ai-instruct-bar__send {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: var(--primary);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.ai-instruct-bar__send:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.ai-instruct-bar__send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ai-instruct-bar__send--busy {
+  cursor: wait;
+}
+
 /* ========== AI Floating Dropdown ========== */
 .ai-floating-dropdown {
   position: fixed;
