@@ -2,7 +2,8 @@ use crate::markdown_parser::{parse_markdown, rebuild_document, MarkdownTable, Pa
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 /// ファイルツリーのエントリ
 #[derive(Debug, Serialize, Deserialize)]
@@ -284,8 +285,11 @@ pub fn git_status(dir_path: String) -> Result<Vec<GitFileStatus>, String> {
 }
 
 /// git add .
+/// Clears assume-unchanged flags on .md files first (set by Zenn deploy).
 #[tauri::command]
 pub fn git_add_all(dir_path: String) -> Result<(), String> {
+    clear_assume_unchanged_md_files(&dir_path);
+
     let output = Command::new("git")
         .args(["add", "."])
         .current_dir(&dir_path)
@@ -299,65 +303,83 @@ pub fn git_add_all(dir_path: String) -> Result<(), String> {
 }
 
 /// git commit -m "message"
-/// For Zenn projects, temporarily replaces ../images/ with /images/ in .md files before committing,
-/// then restores the original content after the commit.
+/// For Zenn projects, replaces ../images/ with /images/ in .md files in the git index only
+/// (without modifying working tree files) using git plumbing commands.
 #[tauri::command]
 pub fn git_commit(dir_path: String, message: String) -> Result<(), String> {
-    // Collect .md files and replace ../images/ -> /images/ for Zenn deploy
-    let originals = fix_image_paths_for_zenn(&dir_path);
-
-    // Re-stage after modifications
-    if !originals.is_empty() {
-        let add_output = Command::new("git")
-            .args(["add", "."])
-            .current_dir(&dir_path)
-            .output()
-            .map_err(|e| {
-                restore_originals(&originals);
-                format!("git add 失敗: {}", e)
-            })?;
-        if !add_output.status.success() {
-            restore_originals(&originals);
-            return Err(String::from_utf8_lossy(&add_output.stderr).to_string());
-        }
-    }
+    // Stage Zenn image path replacements in the index without touching working tree
+    let zenn_fixed_paths = stage_zenn_image_fixes(&dir_path);
 
     let output = Command::new("git")
         .args(["commit", "-m", &message])
         .current_dir(&dir_path)
         .output()
-        .map_err(|e| {
-            restore_originals(&originals);
-            format!("git commit 失敗: {}", e)
-        })?;
-
-    // Always restore original files
-    restore_originals(&originals);
+        .map_err(|e| format!("git commit 失敗: {}", e))?;
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
+
+    // Mark Zenn-fixed files as assume-unchanged so git status stays clean
+    for rel_path in &zenn_fixed_paths {
+        let _ = Command::new("git")
+            .args(["update-index", "--assume-unchanged", rel_path])
+            .current_dir(&dir_path)
+            .output();
+    }
+
     Ok(())
 }
 
-/// Find all .md files recursively and replace ../images/ with /images/.
-/// Returns Vec of (path, original_content) for restoration.
-fn fix_image_paths_for_zenn(dir_path: &str) -> Vec<(std::path::PathBuf, String)> {
-    let mut originals = Vec::new();
+/// Stage Zenn image path fixes in the git index using plumbing commands.
+/// Replaces ../images/ with /images/ in the index only, without modifying working tree files.
+/// Returns list of relative paths that were modified.
+fn stage_zenn_image_fixes(dir_path: &str) -> Vec<String> {
+    let mut fixed_paths = Vec::new();
     let dir = Path::new(dir_path);
+
     if let Ok(entries) = glob_md_files(dir) {
         for path in entries {
             if let Ok(content) = fs::read_to_string(&path) {
                 if content.contains("../images/") {
                     let fixed = content.replace("../images/", "/images/");
-                    if fs::write(&path, &fixed).is_ok() {
-                        originals.push((path, content));
+                    let rel_path = match path.strip_prefix(dir) {
+                        Ok(p) => p.to_string_lossy().replace("\\", "/"),
+                        Err(_) => continue,
+                    };
+
+                    // Create a git blob with the fixed content
+                    let child = Command::new("git")
+                        .args(["hash-object", "-w", "--stdin"])
+                        .current_dir(dir_path)
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .spawn();
+
+                    if let Ok(mut child) = child {
+                        if let Some(ref mut stdin) = child.stdin {
+                            let _ = stdin.write_all(fixed.as_bytes());
+                        }
+                        // Drop stdin to close it before waiting
+                        child.stdin.take();
+                        if let Ok(output) = child.wait_with_output() {
+                            if output.status.success() {
+                                let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                                // Update the index entry to point to the fixed blob
+                                let cacheinfo = format!("100644,{},{}", hash, rel_path);
+                                let _ = Command::new("git")
+                                    .args(["update-index", "--cacheinfo", &cacheinfo])
+                                    .current_dir(dir_path)
+                                    .output();
+                                fixed_paths.push(rel_path);
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    originals
+    fixed_paths
 }
 
 /// Recursively collect .md files
@@ -379,10 +401,19 @@ fn glob_md_files(dir: &Path) -> Result<Vec<std::path::PathBuf>, std::io::Error> 
     Ok(results)
 }
 
-/// Restore original file contents
-fn restore_originals(originals: &[(std::path::PathBuf, String)]) {
-    for (path, content) in originals {
-        let _ = fs::write(path, content);
+/// Clear assume-unchanged flags on all .md files in the repo.
+fn clear_assume_unchanged_md_files(dir_path: &str) {
+    let dir = Path::new(dir_path);
+    if let Ok(entries) = glob_md_files(dir) {
+        for path in entries {
+            if let Ok(rel) = path.strip_prefix(dir) {
+                let rel_path = rel.to_string_lossy().replace("\\", "/");
+                let _ = Command::new("git")
+                    .args(["update-index", "--no-assume-unchanged", &rel_path])
+                    .current_dir(dir_path)
+                    .output();
+            }
+        }
     }
 }
 
