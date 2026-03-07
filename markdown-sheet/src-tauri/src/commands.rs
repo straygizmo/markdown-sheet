@@ -246,7 +246,7 @@ pub struct GitFileStatus {
 #[tauri::command]
 pub fn git_init(dir_path: String) -> Result<(), String> {
     let output = Command::new("git")
-        .args(["init"])
+        .args(["init", "-b", "main"])
         .current_dir(&dir_path)
         .output()
         .map_err(|e| format!("git init 失敗: {}", e))?;
