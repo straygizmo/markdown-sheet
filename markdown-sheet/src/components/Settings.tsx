@@ -35,11 +35,14 @@ interface Props {
   onSaveFilterVisibility: (v: FilterVisibility) => void;
 }
 
+type TabId = "ai" | "display";
+
 const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSaveFilterVisibility }) => {
   const [local, setLocal] = useState<AiSettings>({ ...settings });
   const [localFilter, setLocalFilter] = useState<FilterVisibility>({ ...filterVisibility });
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("ai");
 
   const selectProvider = (id: string) => {
     const preset = PROVIDERS.find((p) => p.id === id);
@@ -144,130 +147,149 @@ const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSa
           <button className="settings-close" onClick={onClose} title="閉じる">✕</button>
         </div>
 
-        <div className="settings-section">
-          <div className="settings-section-title">AI API</div>
-
-          {/* プロバイダー選択（プルダウン） */}
-          <label className="settings-label">プロバイダー</label>
-          <select
-            className="settings-input settings-select"
-            value={local.provider}
-            onChange={(e) => selectProvider(e.target.value)}
+        <div className="settings-tabs">
+          <button
+            className={`settings-tab ${activeTab === "ai" ? "active" : ""}`}
+            onClick={() => setActiveTab("ai")}
           >
-            {PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </select>
+            AI API
+          </button>
+          <button
+            className={`settings-tab ${activeTab === "display" ? "active" : ""}`}
+            onClick={() => setActiveTab("display")}
+          >
+            表示
+          </button>
+        </div>
 
-          <div className="settings-format-badge">
-            形式: <strong>{local.apiFormat === "anthropic" ? "Anthropic Messages API" : local.apiFormat === "azure" ? "Azure OpenAI" : "OpenAI 互換"}</strong>
-          </div>
-
-          {/* API キー */}
-          <label className="settings-label">API キー</label>
-          <input
-            type="password"
-            className="settings-input"
-            value={local.apiKey}
-            onChange={(e) => { setLocal((s) => ({ ...s, apiKey: e.target.value })); setTestMsg(null); }}
-            placeholder={local.apiFormat === "anthropic" ? "sk-ant-..." : local.apiFormat === "azure" ? "Azure API キー" : "sk-..."}
-            spellCheck={false}
-          />
-
-          {/* Base URL */}
-          <label className="settings-label">Base URL</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={local.baseUrl}
-            onChange={(e) => { setLocal((s) => ({ ...s, baseUrl: e.target.value })); setTestMsg(null); }}
-            placeholder="https://api.example.com/v1"
-            spellCheck={false}
-          />
-
-          {/* モデル */}
-          <label className="settings-label">モデル</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={local.model}
-            onChange={(e) => { setLocal((s) => ({ ...s, model: e.target.value })); setTestMsg(null); }}
-            placeholder="model-name"
-            spellCheck={false}
-          />
-
-          {/* 接続テスト */}
-          <div className="settings-test-row">
-            <button
-              className="settings-detect-btn"
-              onClick={handleTest}
-              disabled={testing || !local.baseUrl || !local.model}
+        {activeTab === "ai" && (
+          <div className="settings-section">
+            {/* プロバイダー選択（プルダウン） */}
+            <label className="settings-label" style={{ marginTop: 0 }}>プロバイダー</label>
+            <select
+              className="settings-input settings-select"
+              value={local.provider}
+              onChange={(e) => selectProvider(e.target.value)}
             >
-              {testing ? "テスト中..." : "接続テスト"}
-            </button>
-            {testMsg && (
-              <span className={`settings-detect-msg ${testMsg.ok ? "ok" : "err"}`}>
-                {testMsg.text}
-              </span>
-            )}
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+
+            <div className="settings-format-badge">
+              形式: <strong>{local.apiFormat === "anthropic" ? "Anthropic Messages API" : local.apiFormat === "azure" ? "Azure OpenAI" : "OpenAI 互換"}</strong>
+            </div>
+
+            {/* API キー */}
+            <label className="settings-label">API キー</label>
+            <input
+              type="password"
+              className="settings-input"
+              value={local.apiKey}
+              onChange={(e) => { setLocal((s) => ({ ...s, apiKey: e.target.value })); setTestMsg(null); }}
+              placeholder={local.apiFormat === "anthropic" ? "sk-ant-..." : local.apiFormat === "azure" ? "Azure API キー" : "sk-..."}
+              spellCheck={false}
+            />
+
+            {/* Base URL */}
+            <label className="settings-label">Base URL</label>
+            <input
+              type="text"
+              className="settings-input"
+              value={local.baseUrl}
+              onChange={(e) => { setLocal((s) => ({ ...s, baseUrl: e.target.value })); setTestMsg(null); }}
+              placeholder="https://api.example.com/v1"
+              spellCheck={false}
+            />
+
+            {/* モデル */}
+            <label className="settings-label">モデル</label>
+            <input
+              type="text"
+              className="settings-input"
+              value={local.model}
+              onChange={(e) => { setLocal((s) => ({ ...s, model: e.target.value })); setTestMsg(null); }}
+              placeholder="model-name"
+              spellCheck={false}
+            />
+
+            {/* 接続テスト */}
+            <div className="settings-test-row">
+              <button
+                className="settings-detect-btn"
+                onClick={handleTest}
+                disabled={testing || !local.baseUrl || !local.model}
+              >
+                {testing ? "テスト中..." : "接続テスト"}
+              </button>
+              {testMsg && (
+                <span className={`settings-detect-msg ${testMsg.ok ? "ok" : "err"}`}>
+                  {testMsg.text}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="settings-section">
-          <div className="settings-section-title">画像</div>
-          <label className="settings-toggle-row">
-            <span>画像ボタンを表示</span>
-            <input
-              type="checkbox"
-              checked={localFilter.showImages}
-              onChange={(e) => setLocalFilter((s) => ({ ...s, showImages: e.target.checked }))}
-            />
-          </label>
-        </div>
+        {activeTab === "display" && (
+          <>
+            <div className="settings-section">
+              <div className="settings-section-title">画像</div>
+              <label className="settings-toggle-row">
+                <span>画像ボタンを表示</span>
+                <input
+                  type="checkbox"
+                  checked={localFilter.showImages}
+                  onChange={(e) => setLocalFilter((s) => ({ ...s, showImages: e.target.checked }))}
+                />
+              </label>
+            </div>
 
-        <div className="settings-section">
-          <div className="settings-section-title">Office 系ファイル</div>
-          <label className="settings-toggle-row">
-            <span>.docx ボタンを表示</span>
-            <input
-              type="checkbox"
-              checked={localFilter.showDocx}
-              onChange={(e) => setLocalFilter((s) => ({ ...s, showDocx: e.target.checked }))}
-            />
-          </label>
-          <label className="settings-toggle-row" style={{ marginTop: 6 }}>
-            <span>.xls* ボタンを表示</span>
-            <input
-              type="checkbox"
-              checked={localFilter.showXls}
-              onChange={(e) => setLocalFilter((s) => ({ ...s, showXls: e.target.checked }))}
-            />
-          </label>
-        </div>
+            <div className="settings-section">
+              <div className="settings-section-title">Office 系ファイル</div>
+              <label className="settings-toggle-row">
+                <span>.docx ボタンを表示</span>
+                <input
+                  type="checkbox"
+                  checked={localFilter.showDocx}
+                  onChange={(e) => setLocalFilter((s) => ({ ...s, showDocx: e.target.checked }))}
+                />
+              </label>
+              <label className="settings-toggle-row" style={{ marginTop: 6 }}>
+                <span>.xls* ボタンを表示</span>
+                <input
+                  type="checkbox"
+                  checked={localFilter.showXls}
+                  onChange={(e) => setLocalFilter((s) => ({ ...s, showXls: e.target.checked }))}
+                />
+              </label>
+            </div>
 
-        <div className="settings-section">
-          <div className="settings-section-title">マインドマップ</div>
-          <label className="settings-toggle-row">
-            <span>.km / .xmind ボタンを表示</span>
-            <input
-              type="checkbox"
-              checked={localFilter.showKm}
-              onChange={(e) => setLocalFilter((s) => ({ ...s, showKm: e.target.checked }))}
-            />
-          </label>
-        </div>
+            <div className="settings-section">
+              <div className="settings-section-title">マインドマップ</div>
+              <label className="settings-toggle-row">
+                <span>.km / .xmind ボタンを表示</span>
+                <input
+                  type="checkbox"
+                  checked={localFilter.showKm}
+                  onChange={(e) => setLocalFilter((s) => ({ ...s, showKm: e.target.checked }))}
+                />
+              </label>
+            </div>
 
-        <div className="settings-section">
-          <div className="settings-section-title">Zenn</div>
-          <label className="settings-toggle-row">
-            <span>Zenn ボタンを表示</span>
-            <input
-              type="checkbox"
-              checked={localFilter.showZenn}
-              onChange={(e) => setLocalFilter((s) => ({ ...s, showZenn: e.target.checked }))}
-            />
-          </label>
-        </div>
+            <div className="settings-section">
+              <div className="settings-section-title">Zenn</div>
+              <label className="settings-toggle-row">
+                <span>Zenn ボタンを表示</span>
+                <input
+                  type="checkbox"
+                  checked={localFilter.showZenn}
+                  onChange={(e) => setLocalFilter((s) => ({ ...s, showZenn: e.target.checked }))}
+                />
+              </label>
+            </div>
+          </>
+        )}
 
         <div className="settings-footer">
           <button className="settings-close-btn" onClick={onClose}>キャンセル</button>
