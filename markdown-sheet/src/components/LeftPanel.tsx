@@ -115,6 +115,7 @@ export default function LeftPanel({
           showToast={showToast}
           onRefreshFileTree={onRefresh}
           onRefreshZenn={onRefreshZenn}
+          zennArticlesMeta={zennArticlesMeta}
         />
       )}
     </div>

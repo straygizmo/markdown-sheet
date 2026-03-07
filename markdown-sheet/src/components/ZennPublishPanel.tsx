@@ -1,5 +1,6 @@
 import { type FC, useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import type { ZennArticleMeta } from "../types";
 import "./ZennPublishPanel.css";
 
 interface GitFileStatus {
@@ -12,9 +13,10 @@ interface Props {
   showToast: (message: string, isError?: boolean) => void;
   onRefreshFileTree: () => void;
   onRefreshZenn: () => void;
+  zennArticlesMeta?: Record<string, ZennArticleMeta>;
 }
 
-const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree, onRefreshZenn }) => {
+const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree, onRefreshZenn, zennArticlesMeta }) => {
   const [gitStatus, setGitStatus] = useState<GitFileStatus[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,12 +57,36 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
     }
   }, [folderPath, remoteInput, showToast]);
 
+  const generateCommitMessage = useCallback((files: GitFileStatus[]) => {
+    if (!zennArticlesMeta) return "";
+    const mdFiles = files.filter(f => f.path.endsWith(".md") && f.path.startsWith("articles/"));
+    if (mdFiles.length === 0) return "";
+    const titles: string[] = [];
+    for (const f of mdFiles) {
+      const normalizedGitPath = f.path.replace(/\//g, "\\");
+      const meta = Object.entries(zennArticlesMeta).find(
+        ([key]) => key.endsWith(normalizedGitPath) || key.endsWith(f.path)
+      );
+      if (meta?.[1]?.title) {
+        titles.push(meta[1].title);
+      }
+    }
+    if (titles.length === 0) return "";
+    return titles.length === 1
+      ? `${titles[0]}の変更`
+      : `${titles.join(", ")}の変更`;
+  }, [zennArticlesMeta]);
+
   const fetchGitStatus = useCallback(async () => {
     setStatusLoading(true);
     try {
       const result = await invoke<GitFileStatus[]>("git_status", { dirPath: folderPath });
       setGitStatus(result);
       setNotGitRepo(false);
+      const autoMsg = generateCommitMessage(result);
+      if (autoMsg) {
+        setCommitMessage(autoMsg);
+      }
     } catch (e) {
       setGitStatus([]);
       const msg = String(e);
@@ -72,7 +98,7 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
     } finally {
       setStatusLoading(false);
     }
-  }, [folderPath, showToast]);
+  }, [folderPath, showToast, generateCommitMessage]);
 
   useEffect(() => {
     fetchGitStatus();

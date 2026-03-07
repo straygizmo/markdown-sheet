@@ -317,10 +317,24 @@ pub fn git_commit(dir_path: String, message: String) -> Result<(), String> {
         .map_err(|e| format!("git commit 失敗: {}", e))?;
 
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        // When Zenn image path fixes are the only staged changes, the index
+        // content may match HEAD, causing "nothing to commit". Allow this.
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let no_changes = stdout.contains("nothing to commit")
+            || stdout.contains("no changes added to commit");
+        if !no_changes {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let msg = if stderr.trim().is_empty() {
+                stdout.to_string()
+            } else {
+                stderr.to_string()
+            };
+            return Err(msg);
+        }
     }
 
     // Mark Zenn-fixed files as assume-unchanged so git status stays clean
+    // (index has /images/ but working tree has ../images/)
     for rel_path in &zenn_fixed_paths {
         let _ = Command::new("git")
             .args(["update-index", "--assume-unchanged", rel_path])
