@@ -386,12 +386,12 @@
   padding: 16px 20px;
   border-radius: 8px;
   margin: 16px 0;
-  background: #e8f4fd;
-  border-left: 4px solid #3ea8ff;
+  background: #fdf9e2;
+  border-left: 4px solid #f5c800;
   color: #1a1a1a;
 }
 [data-theme="dark"] .md-preview .zenn-message {
-  background: #1a2d3d;
+  background: #2d2a1a;
   color: #e0e0e0;
 }
 
