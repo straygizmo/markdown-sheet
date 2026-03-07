@@ -397,10 +397,28 @@
 
 /* :::message alert */
 .md-preview .zenn-message-alert {
+  background: #fdeaea;
+  border-left-color: #f87171;
+}
+[data-theme="dark"] .md-preview .zenn-message-alert {
+  background: #3d1a1a;
+}
+
+/* :::message success */
+.md-preview .zenn-message-success {
+  background: #e6f6e6;
+  border-left-color: #22c55e;
+}
+[data-theme="dark"] .md-preview .zenn-message-success {
+  background: #1a3d1a;
+}
+
+/* :::message warning */
+.md-preview .zenn-message-warning {
   background: #fff3e0;
   border-left-color: #ff9800;
 }
-[data-theme="dark"] .md-preview .zenn-message-alert {
+[data-theme="dark"] .md-preview .zenn-message-warning {
   background: #3d2a1a;
 }
 
