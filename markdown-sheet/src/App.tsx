@@ -1270,6 +1270,7 @@ function App() {
 
   // --- Zenn プロジェクト初期化 ---
   const [showZennInitConfirm, setShowZennInitConfirm] = useState(false);
+  const [zennInitRepoUrl, setZennInitRepoUrl] = useState("");
 
   const handleInitZennClick = useCallback(() => {
     if (!folderPath) {
@@ -1280,10 +1281,16 @@ function App() {
       showToast("このフォルダは既にZennプロジェクト用に初期化されています");
       return;
     }
+    setZennInitRepoUrl("");
     setShowZennInitConfirm(true);
   }, [folderPath, zennProjectInfo, showToast]);
 
   const handleInitZennConfirm = useCallback(async () => {
+    const url = zennInitRepoUrl.trim();
+    if (!url) {
+      showToast("GitHub リポジトリURLを入力してください", true);
+      return;
+    }
     setShowZennInitConfirm(false);
     if (!folderPath) return;
     try {
@@ -1292,13 +1299,14 @@ function App() {
       await mkdir(base + "/books", { recursive: true });
       await mkdir(base + "/images", { recursive: true });
       await invoke("git_init", { dirPath: folderPath });
+      await invoke("git_set_remote_url", { dirPath: folderPath, url });
       showToast("Zenn プロジェクトを初期化しました");
       await refreshFileTree();
       await detectZennProject(folderPath);
     } catch (e) {
       showToast(`Zenn 初期化に失敗しました: ${e}`, true);
     }
-  }, [folderPath, showToast, refreshFileTree, detectZennProject]);
+  }, [folderPath, zennInitRepoUrl, showToast, refreshFileTree, detectZennProject]);
 
   // --- Zenn 新規記事作成 ---
   const handleCreateZennArticle = useCallback(
@@ -2079,8 +2087,32 @@ function App() {
               <ul style={{ margin: "4px 0 12px 20px" }}>
                 <li>articles / books / images フォルダの作成</li>
                 <li>git init の実行</li>
+                <li>GitHub リポジトリとの連携</li>
               </ul>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--text-muted)" }}>
+
+                Zenn へのデプロイには{" "}
+                <a
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); invoke("open_external_url", { url: "https://zenn.dev/zenn/articles/connect-to-github" }); }}
+                  style={{ color: "#3ea8ff" }}
+                >GitHub 連携</a>
+                が必要です。事前に Zenn ダッシュボードでリポジトリを連携し、そのURLを入力してください。
+              </p>
+              <input
+                type="text"
+                value={zennInitRepoUrl}
+                onChange={(e) => setZennInitRepoUrl(e.target.value)}
+                placeholder="https://github.com/user/repo.git"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleInitZennConfirm();
+                  }
+                }}
+                style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-surface)", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
                 <button
                   onClick={() => setShowZennInitConfirm(false)}
                   style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-surface)", color: "var(--text)", cursor: "pointer", fontSize: 13 }}
@@ -2089,7 +2121,8 @@ function App() {
                 </button>
                 <button
                   onClick={handleInitZennConfirm}
-                  style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#3ea8ff", color: "white", fontWeight: 600, cursor: "pointer", fontSize: 13 }}
+                  disabled={!zennInitRepoUrl.trim()}
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: zennInitRepoUrl.trim() ? "#3ea8ff" : "#3ea8ff80", color: "white", fontWeight: 600, cursor: zennInitRepoUrl.trim() ? "pointer" : "default", fontSize: 13 }}
                 >
                   OK
                 </button>

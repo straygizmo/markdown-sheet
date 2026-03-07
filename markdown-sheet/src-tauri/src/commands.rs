@@ -313,17 +313,110 @@ pub fn git_commit(dir_path: String, message: String) -> Result<(), String> {
     Ok(())
 }
 
-/// git push
+/// git remote get-url origin
+#[tauri::command]
+pub fn git_get_remote_url(dir_path: String) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(&dir_path)
+        .output()
+        .map_err(|e| format!("git remote 取得失敗: {}", e))?;
+
+    if !output.status.success() {
+        return Ok(String::new());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// git remote add/set-url origin <url>
+#[tauri::command]
+pub fn git_set_remote_url(dir_path: String, url: String) -> Result<(), String> {
+    // Check if origin already exists
+    let check = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(&dir_path)
+        .output()
+        .map_err(|e| format!("git remote 確認失敗: {}", e))?;
+
+    let args = if check.status.success() {
+        vec!["remote", "set-url", "origin", &url]
+    } else {
+        vec!["remote", "add", "origin", &url]
+    };
+
+    let output = Command::new("git")
+        .args(&args)
+        .current_dir(&dir_path)
+        .output()
+        .map_err(|e| format!("git remote 設定失敗: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(())
+}
+
+/// git push (with -u origin main/master for first push)
 #[tauri::command]
 pub fn git_push(dir_path: String) -> Result<(), String> {
+    // Try normal push first
     let output = Command::new("git")
         .args(["push"])
         .current_dir(&dir_path)
         .output()
         .map_err(|e| format!("git push 失敗: {}", e))?;
 
-    if !output.status.success() {
+    if output.status.success() {
+        return Ok(());
+    }
+
+    // If failed, try detecting current branch and push with -u
+    let branch_output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&dir_path)
+        .output()
+        .map_err(|e| format!("ブランチ名取得失敗: {}", e))?;
+
+    let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
+    if branch.is_empty() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let retry = Command::new("git")
+        .args(["push", "-u", "origin", &branch])
+        .current_dir(&dir_path)
+        .output()
+        .map_err(|e| format!("git push -u 失敗: {}", e))?;
+
+    if !retry.status.success() {
+        return Err(String::from_utf8_lossy(&retry.stderr).to_string());
+    }
+    Ok(())
+}
+
+/// URLをデフォルトブラウザで開く
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("URL を開けませんでした: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("URL を開けませんでした: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("URL を開けませんでした: {}", e))?;
     }
     Ok(())
 }

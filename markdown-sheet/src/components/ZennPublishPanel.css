@@ -27,6 +27,89 @@
   background: var(--bg-overlay);
 }
 
+.zenn-publish-remote {
+  margin-bottom: 6px;
+}
+
+.zenn-publish-remote-empty,
+.zenn-publish-remote-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.zenn-publish-remote-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.zenn-publish-remote-edit-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 1px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.zenn-publish-remote-edit-btn:hover {
+  background: var(--bg-overlay);
+}
+
+.zenn-publish-remote-form {
+  display: flex;
+  gap: 4px;
+}
+
+.zenn-publish-remote-input {
+  flex: 1;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 11px;
+  min-width: 0;
+}
+
+.zenn-publish-remote-save-btn {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 4px;
+  background: #3ea8ff;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.zenn-publish-remote-save-btn:hover:not(:disabled) {
+  background: #2196f3;
+}
+.zenn-publish-remote-save-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.zenn-publish-remote-cancel-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+.zenn-publish-remote-cancel-btn:hover:not(:disabled) {
+  background: var(--bg-overlay);
+}
+
 .zenn-publish-status {
   max-height: 120px;
   overflow-y: auto;

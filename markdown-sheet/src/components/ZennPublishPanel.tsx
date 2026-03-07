@@ -20,6 +20,40 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
   const [loading, setLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
   const [notGitRepo, setNotGitRepo] = useState(false);
+  const [remoteUrl, setRemoteUrl] = useState("");
+  const [remoteInput, setRemoteInput] = useState("");
+  const [editingRemote, setEditingRemote] = useState(false);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+
+  const fetchRemoteUrl = useCallback(async () => {
+    try {
+      const url = await invoke<string>("git_get_remote_url", { dirPath: folderPath });
+      setRemoteUrl(url);
+      setRemoteInput(url);
+    } catch {
+      setRemoteUrl("");
+      setRemoteInput("");
+    }
+  }, [folderPath]);
+
+  const handleSetRemote = useCallback(async () => {
+    const url = remoteInput.trim();
+    if (!url) {
+      showToast("リポジトリURLを入力してください", true);
+      return;
+    }
+    setRemoteLoading(true);
+    try {
+      await invoke("git_set_remote_url", { dirPath: folderPath, url });
+      setRemoteUrl(url);
+      setEditingRemote(false);
+      showToast("リモートURLを設定しました");
+    } catch (e) {
+      showToast(`リモートURL設定失敗: ${e}`, true);
+    } finally {
+      setRemoteLoading(false);
+    }
+  }, [folderPath, remoteInput, showToast]);
 
   const fetchGitStatus = useCallback(async () => {
     setStatusLoading(true);
@@ -42,7 +76,8 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
 
   useEffect(() => {
     fetchGitStatus();
-  }, [fetchGitStatus]);
+    fetchRemoteUrl();
+  }, [fetchGitStatus, fetchRemoteUrl]);
 
   const handleCommitAndPush = useCallback(async () => {
     if (!commitMessage.trim()) {
@@ -67,20 +102,6 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
     }
   }, [folderPath, commitMessage, showToast, onRefreshFileTree, onRefreshZenn, fetchGitStatus]);
 
-  const handleGitInit = useCallback(async () => {
-    setLoading(true);
-    try {
-      await invoke("git_init", { dirPath: folderPath });
-      showToast("Git リポジトリを初期化しました");
-      setNotGitRepo(false);
-      await fetchGitStatus();
-    } catch (e) {
-      showToast(`git init 失敗: ${e}`, true);
-    } finally {
-      setLoading(false);
-    }
-  }, [folderPath, showToast, fetchGitStatus]);
-
   if (notGitRepo) {
     return (
       <div className="zenn-publish">
@@ -88,16 +109,6 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
           <span>Zenn デプロイ (Git)</span>
         </div>
         <div className="zenn-publish-empty">Git リポジトリではありません</div>
-        <div className="zenn-publish-actions">
-          <button
-            className="zenn-publish-btn"
-            onClick={handleGitInit}
-            disabled={loading}
-            style={{ flex: 1 }}
-          >
-            {loading ? "初期化中..." : "git init"}
-          </button>
-        </div>
       </div>
     );
   }
@@ -114,6 +125,56 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
         >
           ↻
         </button>
+      </div>
+
+      <div className="zenn-publish-remote">
+        {editingRemote ? (
+          <div className="zenn-publish-remote-form">
+            <input
+              type="text"
+              className="zenn-publish-remote-input"
+              value={remoteInput}
+              onChange={(e) => setRemoteInput(e.target.value)}
+              placeholder="https://github.com/user/repo.git"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !remoteLoading) {
+                  e.preventDefault();
+                  handleSetRemote();
+                }
+                if (e.key === "Escape") {
+                  setEditingRemote(false);
+                  setRemoteInput(remoteUrl);
+                }
+              }}
+              disabled={remoteLoading}
+            />
+            <button
+              className="zenn-publish-remote-save-btn"
+              onClick={handleSetRemote}
+              disabled={remoteLoading}
+            >
+              {remoteLoading ? "..." : "保存"}
+            </button>
+            <button
+              className="zenn-publish-remote-cancel-btn"
+              onClick={() => { setEditingRemote(false); setRemoteInput(remoteUrl); }}
+              disabled={remoteLoading}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="zenn-publish-remote-display">
+            <span className="zenn-publish-remote-url" title={remoteUrl}>{remoteUrl}</span>
+            <button
+              className="zenn-publish-remote-edit-btn"
+              onClick={() => setEditingRemote(true)}
+              title="リモートURLを変更"
+            >
+              編集
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="zenn-publish-status">
@@ -153,7 +214,7 @@ const ZennPublishPanel: FC<Props> = ({ folderPath, showToast, onRefreshFileTree,
         <button
           className="zenn-publish-btn"
           onClick={handleCommitAndPush}
-          disabled={loading || gitStatus.length === 0}
+          disabled={loading || gitStatus.length === 0 || !remoteUrl}
         >
           {loading ? "処理中..." : "Commit & Push"}
         </button>
