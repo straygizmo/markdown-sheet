@@ -188,29 +188,18 @@
 /* ========== Zenn バッジ ========== */
 .zenn-badge {
   -webkit-app-region: no-drag;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
+  background: #3ea8ff !important;
+  border: 1px solid #3ea8ff !important;
+  color: white !important;
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  cursor: pointer;
+  cursor: default;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  transition: all 0.2s;
   padding: 0;
-}
-.zenn-badge:hover {
-  background: #3ea8ff;
-  color: white;
-  border-color: #3ea8ff;
-}
-.zenn-badge-active {
-  background: #3ea8ff;
-  color: white;
-  border-color: #3ea8ff;
-  box-shadow: 0 0 6px rgba(62, 168, 255, 0.4);
+  opacity: 1 !important;
 }

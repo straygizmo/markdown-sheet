@@ -156,7 +156,7 @@ function App() {
     showDocxBtn, showXlsBtn, showKmBtn, showImagesBtn, showZennBtn,
     handleSaveFilterVisibility,
     refreshFileTree,
-  } = useFileFilters(folderPath, setFileTree);
+  } = useFileFilters(folderPath, setFileTree, isZennMode);
 
   // --- Table editor ---
   const {
@@ -411,10 +411,11 @@ function App() {
         try {
           const entries: FileEntry[] = await invoke("get_file_tree", {
             dirPath: folder,
-            includeDocx: filterDocx,
-            includeXls: filterXls,
-            includeKm: filterKm,
-            includeImages: filterImages,
+            includeDocx: isZennMode ? false : filterDocx,
+            includeXls: isZennMode ? false : filterXls,
+            includeKm: isZennMode ? false : filterKm,
+            includeImages: isZennMode ? true : filterImages,
+            includeEmptyDirs: isZennMode,
           });
           setFileTree(entries);
           setFolderPath(folder);
@@ -1004,12 +1005,13 @@ function App() {
         includeXls: filterXls,
         includeKm: filterKm,
         includeImages: filterImages,
+        includeEmptyDirs: isZennMode,
       });
       openFolderAndActivateTab(selected, entries);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
     }
-  }, [filterDocx, filterXls, filterKm, filterImages, openFolderAndActivateTab, showToast]);
+  }, [filterDocx, filterXls, filterKm, filterImages, isZennMode, openFolderAndActivateTab, showToast]);
 
   // --- Open recent folder ---
   const handleOpenRecentFolder = useCallback(async (path: string) => {
@@ -1020,13 +1022,14 @@ function App() {
         includeXls: filterXls,
         includeKm: filterKm,
         includeImages: filterImages,
+        includeEmptyDirs: isZennMode,
       });
       openFolderAndActivateTab(path, entries);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
       showToast("フォルダを開けませんでした", true);
     }
-  }, [filterDocx, filterXls, filterKm, filterImages, openFolderAndActivateTab, showToast]);
+  }, [filterDocx, filterXls, filterKm, filterImages, isZennMode, openFolderAndActivateTab, showToast]);
 
   // --- File open ---
   const handleOpenFile = useCallback(async () => {
@@ -1271,18 +1274,31 @@ function App() {
       showToast("先にフォルダを開いてください", true);
       return;
     }
+    if (zennProjectInfo?.is_zenn_project) {
+      window.alert("このフォルダは既にZennプロジェクト用に初期化されています");
+      return;
+    }
+    const ok = window.confirm(
+      "このフォルダを Zenn プロジェクトとして初期化します。\n\n" +
+      "初期化では以下を行います:\n" +
+      "・articles / books / images フォルダの作成\n" +
+      "・git init の実行\n\n" +
+      "よろしいですか？"
+    );
+    if (!ok) return;
     try {
       const base = folderPath.replace(/\\/g, "/");
       await mkdir(base + "/articles", { recursive: true });
       await mkdir(base + "/books", { recursive: true });
       await mkdir(base + "/images", { recursive: true });
+      await invoke("git_init", { dirPath: folderPath });
       showToast("Zenn プロジェクトを初期化しました");
       await refreshFileTree();
       await detectZennProject(folderPath);
     } catch (e) {
       showToast(`Zenn 初期化に失敗しました: ${e}`, true);
     }
-  }, [folderPath, showToast, refreshFileTree, detectZennProject]);
+  }, [folderPath, zennProjectInfo, showToast, refreshFileTree, detectZennProject]);
 
   // --- Zenn 新規記事作成 ---
   const handleCreateZennArticle = useCallback(
@@ -1752,8 +1768,6 @@ function App() {
         onToggleTerminal={() => setTerminalVisible((v) => !v)}
         onOpenSettings={() => setShowSettings(true)}
         isZennMode={isZennMode}
-        zennDetected={!!zennProjectInfo?.is_zenn_project}
-        onToggleZennMode={() => setIsZennMode((v) => !v)}
         onNewZennArticle={() => setShowZennNewArticle(true)}
       />
 
@@ -1812,7 +1826,6 @@ function App() {
           onRefreshZenn={() => { if (folderPath) detectZennProject(folderPath); }}
           showZennBtn={showZennBtn}
           onInitZenn={handleInitZenn}
-          onToggleZennMode={() => setIsZennMode((v) => !v)}
           content={content}
           onHeadingClick={handleOutlineClick}
         />

@@ -1,6 +1,6 @@
 /* ========== Left Panel (wrapper) ========== */
 .left-panel {
-  width: 240px;
+  width: 300px;
   min-width: 160px;
   max-width: 360px;
   display: flex;

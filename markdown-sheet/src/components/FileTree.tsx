@@ -24,7 +24,6 @@ interface Props {
   zennArticlesMeta?: Record<string, ZennArticleMeta>;
   showZennBtn?: boolean;
   onInitZenn?: () => void;
-  onToggleZennMode?: () => void;
 }
 
 function getFileIcon(name: string): string {
@@ -130,7 +129,6 @@ const FileTree: FC<Props> = ({
   zennArticlesMeta,
   showZennBtn = false,
   onInitZenn,
-  onToggleZennMode,
 }) => {
   return (
     <>
@@ -150,16 +148,17 @@ const FileTree: FC<Props> = ({
         >
           .md
         </button>
-        {showImagesBtn && (
+        {(isZennMode || showImagesBtn) && (
           <button
-            className={`file-tree-filter-btn ${filterImages ? "active" : ""}`}
-            onClick={onToggleImages}
-            title="画像ファイル 表示切替"
+            className={`file-tree-filter-btn ${isZennMode || filterImages ? "active" : ""}`}
+            onClick={isZennMode ? undefined : onToggleImages}
+            disabled={isZennMode}
+            title={isZennMode ? "画像ファイル (Zenn モードでは常に表示)" : "画像ファイル 表示切替"}
           >
             🖼️
           </button>
         )}
-        {showDocxBtn && (
+        {!isZennMode && showDocxBtn && (
           <button
             className={`file-tree-filter-btn ${filterDocx ? "active" : ""}`}
             onClick={onToggleDocx}
@@ -168,7 +167,7 @@ const FileTree: FC<Props> = ({
             .docx
           </button>
         )}
-        {showXlsBtn && (
+        {!isZennMode && showXlsBtn && (
           <button
             className={`file-tree-filter-btn ${filterXls ? "active" : ""}`}
             onClick={onToggleXls}
@@ -177,7 +176,7 @@ const FileTree: FC<Props> = ({
             .xls*
           </button>
         )}
-        {showKmBtn && (
+        {!isZennMode && showKmBtn && (
           <button
             className={`file-tree-filter-btn ${filterKm ? "active" : ""}`}
             onClick={onToggleKm}
@@ -186,11 +185,11 @@ const FileTree: FC<Props> = ({
             .km/.xmind
           </button>
         )}
-        {showZennBtn && (
+        {!isZennMode && showZennBtn && (
           <button
-            className={`file-tree-filter-btn zenn-init-btn ${isZennMode ? "active" : ""}`}
-            onClick={isZennMode ? onToggleZennMode : onInitZenn}
-            title={isZennMode ? "Zenn モード ON/OFF" : "Zenn プロジェクトとして初期化"}
+            className="file-tree-filter-btn zenn-init-btn"
+            onClick={onInitZenn}
+            title="Zenn プロジェクトとして初期化"
           >
             Zenn
           </button>

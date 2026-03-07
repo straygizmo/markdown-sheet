@@ -27,8 +27,6 @@ interface Props {
   onToggleTerminal: () => void;
   onOpenSettings: () => void;
   isZennMode: boolean;
-  zennDetected: boolean;
-  onToggleZennMode: () => void;
   onNewZennArticle?: () => void;
 }
 
@@ -57,8 +55,6 @@ const Toolbar: FC<Props> = ({
   onToggleTerminal,
   onOpenSettings,
   isZennMode,
-  zennDetected,
-  onToggleZennMode,
   onNewZennArticle,
 }) => {
   const [showRecent, setShowRecent] = useState(false);
@@ -214,11 +210,11 @@ const Toolbar: FC<Props> = ({
             + 記事
           </button>
         )}
-        {zennDetected && (
+        {isZennMode && (
           <button
-            className={`zenn-badge${isZennMode ? " zenn-badge-active" : ""}`}
-            onClick={onToggleZennMode}
-            title={`Zenn モード${isZennMode ? " ON" : " OFF"}`}
+            className="zenn-badge"
+            disabled
+            title="このフォルダはZennプロジェクト用に初期化されています"
           >
             Z
           </button>

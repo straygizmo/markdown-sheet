@@ -35,7 +35,7 @@ fn is_target_file(name: &str, include_docx: bool, include_xls: bool, include_km:
 }
 
 /// ディレクトリを再帰的に読み取り、対象ファイルとフォルダのみ返す
-fn read_dir_recursive(dir: &Path, depth: u32, include_docx: bool, include_xls: bool, include_km: bool, include_images: bool) -> Vec<FileEntry> {
+fn read_dir_recursive(dir: &Path, depth: u32, include_docx: bool, include_xls: bool, include_km: bool, include_images: bool, include_empty_dirs: bool) -> Vec<FileEntry> {
     if depth > 5 {
         return Vec::new();
     }
@@ -57,9 +57,9 @@ fn read_dir_recursive(dir: &Path, depth: u32, include_docx: bool, include_xls: b
         }
 
         if path.is_dir() {
-            let children = read_dir_recursive(&path, depth + 1, include_docx, include_xls, include_km, include_images);
-            // 対象ファイルを含むフォルダのみ表示
-            if !children.is_empty() {
+            let children = read_dir_recursive(&path, depth + 1, include_docx, include_xls, include_km, include_images, include_empty_dirs);
+            // 対象ファイルを含むフォルダのみ表示（include_empty_dirs の場合は空フォルダも表示）
+            if !children.is_empty() || include_empty_dirs {
                 entries.push(FileEntry {
                     name,
                     path: path.to_string_lossy().to_string(),
@@ -87,6 +87,7 @@ pub fn get_file_tree(
     include_xls: Option<bool>,
     include_km: Option<bool>,
     include_images: Option<bool>,
+    include_empty_dirs: Option<bool>,
 ) -> Result<Vec<FileEntry>, String> {
     let path = Path::new(&dir_path);
     if !path.exists() || !path.is_dir() {
@@ -99,6 +100,7 @@ pub fn get_file_tree(
         include_xls.unwrap_or(false),
         include_km.unwrap_or(false),
         include_images.unwrap_or(false),
+        include_empty_dirs.unwrap_or(false),
     ))
 }
 

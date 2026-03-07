@@ -31,7 +31,6 @@ interface LeftPanelProps {
   onRefreshZenn?: () => void;
   showZennBtn?: boolean;
   onInitZenn?: () => void;
-  onToggleZennMode?: () => void;
   // OutlinePanel
   content: string;
   onHeadingClick: (headingId: string) => void;
@@ -64,7 +63,6 @@ export default function LeftPanel({
   onRefreshZenn,
   showZennBtn,
   onInitZenn,
-  onToggleZennMode,
   content,
   onHeadingClick,
 }: LeftPanelProps) {
@@ -107,7 +105,6 @@ export default function LeftPanel({
           zennArticlesMeta={zennArticlesMeta}
           showZennBtn={showZennBtn}
           onInitZenn={onInitZenn}
-          onToggleZennMode={onToggleZennMode}
         />
       ) : (
         <OutlinePanel content={content} onHeadingClick={onHeadingClick} />

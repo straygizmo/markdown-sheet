@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import type { FileEntry } from "../types";
 
-export function useFileFilters(folderPath: string | null, setFileTree: (entries: FileEntry[]) => void) {
+export function useFileFilters(folderPath: string | null, setFileTree: (entries: FileEntry[]) => void, isZennMode = false) {
   const migrateOld = localStorage.getItem("md-office-viewer") === "true";
   const [filterDocx, setFilterDocx] = useState(
     () => localStorage.getItem("md-filter-docx") !== null
@@ -86,15 +86,16 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
       try {
         const entries: FileEntry[] = await invoke("get_file_tree", {
           dirPath: folderPath,
-          includeDocx: filterDocx,
-          includeXls: filterXls,
-          includeKm: filterKm,
-          includeImages: filterImages,
+          includeDocx: isZennMode ? false : filterDocx,
+          includeXls: isZennMode ? false : filterXls,
+          includeKm: isZennMode ? false : filterKm,
+          includeImages: isZennMode ? true : filterImages,
+          includeEmptyDirs: isZennMode,
         });
         setFileTree(entries);
       } catch { /* ignore */ }
     })();
-  }, [filterDocx, filterXls, filterKm, filterImages, folderPath, setFileTree]);
+  }, [filterDocx, filterXls, filterKm, filterImages, folderPath, setFileTree, isZennMode]);
 
   // ファイルツリーを再取得するコールバック
   const refreshFileTree = useCallback(async () => {
@@ -102,14 +103,15 @@ export function useFileFilters(folderPath: string | null, setFileTree: (entries:
     try {
       const entries: FileEntry[] = await invoke("get_file_tree", {
         dirPath: folderPath,
-        includeDocx: filterDocx,
-        includeXls: filterXls,
-        includeKm: filterKm,
-        includeImages: filterImages,
+        includeDocx: isZennMode ? false : filterDocx,
+        includeXls: isZennMode ? false : filterXls,
+        includeKm: isZennMode ? false : filterKm,
+        includeImages: isZennMode ? true : filterImages,
+        includeEmptyDirs: isZennMode,
       });
       setFileTree(entries);
     } catch { /* ignore */ }
-  }, [folderPath, filterDocx, filterXls, filterKm, filterImages, setFileTree]);
+  }, [folderPath, filterDocx, filterXls, filterKm, filterImages, setFileTree, isZennMode]);
 
   return {
     filterDocx, filterXls, filterKm, filterImages,
