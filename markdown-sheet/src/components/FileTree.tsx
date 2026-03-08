@@ -191,7 +191,7 @@ const FileTree: FC<Props> = ({
           <button
             className="file-tree-filter-btn zenn-init-btn"
             onClick={onInitZenn}
-            title="Zenn プロジェクトとして初期化"
+            title="このフォルダをZenn記事執筆用として初期化"
           >
             Zenn
           </button>

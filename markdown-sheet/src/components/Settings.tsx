@@ -280,7 +280,7 @@ const Settings: FC<Props> = ({ settings, onSave, onClose, filterVisibility, onSa
             <div className="settings-section">
               <div className="settings-section-title">Zenn</div>
               <label className="settings-toggle-row">
-                <span>Zenn ボタンを表示</span>
+                <span>Zenn記事執筆用として初期化ボタンを表示</span>
                 <input
                   type="checkbox"
                   checked={localFilter.showZenn}

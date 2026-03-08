@@ -261,6 +261,9 @@ pub fn git_init(dir_path: String) -> Result<(), String> {
 /// git status --porcelain の結果を返す
 #[tauri::command]
 pub fn git_status(dir_path: String) -> Result<Vec<GitFileStatus>, String> {
+    // Clear assume-unchanged flags so modified .md files appear in status
+    clear_assume_unchanged_md_files(&dir_path);
+
     let output = Command::new("git")
         .args(["status", "--porcelain"])
         .current_dir(&dir_path)
