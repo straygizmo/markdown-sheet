@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { exists, mkdir, readDir, readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import AiGenerateModal from "./components/AiGenerateModal";
 import ZennNewArticleDialog from "./components/ZennNewArticleDialog";
@@ -64,9 +64,18 @@ function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [activeViewTab, setActiveViewTab] = useState<ViewTab>("preview");
   const [editorVisible, setEditorVisible] = useState(true);
-  const [terminalVisible, setTerminalVisible] = useState(false);
+  const [folderPanelVisible, setFolderPanelVisible] = useState(false);
   const [folderPanelTab, setFolderPanelTab] = useState<"terminal" | "rag">("terminal");
   const [leftPanel, setLeftPanel] = useState<"folder" | "outline">("folder");
+
+  // 開いているフォルダ一覧（Terminal をフォルダごとに保持するため）
+  const openFolders = useMemo(() => {
+    const seen = new Set<string>();
+    for (const tab of tabs) {
+      seen.add(tab.folderPath);
+    }
+    return Array.from(seen);
+  }, [tabs]);
   const [showSettings, setShowSettings] = useState(false);
 
   // --- Zenn mode ---
@@ -180,7 +189,6 @@ function App() {
   // --- Editor pane ---
   const [editorRatio, setEditorRatio] = useState(40);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [ragVisible, setRagVisible] = useState(false);
   const [folderPanelRatio, setFolderPanelRatio] = useState(25);
   const appBodyRef = useRef<HTMLDivElement>(null);
   const folderContentRef = useRef<HTMLDivElement>(null);
@@ -1785,8 +1793,7 @@ function App() {
     closeTab,
     setShowSearch,
     setEditorVisible,
-    setTerminalVisible,
-    setRagVisible,
+    setFolderPanelVisible,
     folderPanelTab,
     setFolderPanelTab,
     tabsRef,
@@ -1835,25 +1842,9 @@ function App() {
         onToggleSearch={() => setShowSearch((s) => !s)}
         onToggleTheme={toggleTheme}
         onPasteFromClipboard={handlePasteFromClipboard}
-        terminalVisible={terminalVisible}
-        ragVisible={ragVisible}
+        folderPanelVisible={folderPanelVisible}
         onToggleEditor={() => setEditorVisible((v) => !v)}
-        onToggleTerminal={() => {
-          if (terminalVisible && folderPanelTab === "terminal") {
-            setTerminalVisible(false);
-          } else {
-            setTerminalVisible(true);
-            setFolderPanelTab("terminal");
-          }
-        }}
-        onToggleRag={() => {
-          if (ragVisible && folderPanelTab === "rag") {
-            setRagVisible(false);
-          } else {
-            setRagVisible(true);
-            setFolderPanelTab("rag");
-          }
-        }}
+        onToggleFolderPanel={() => setFolderPanelVisible((v) => !v)}
         onOpenSettings={() => setShowSettings(true)}
         isZennMode={isZennMode}
         onNewZennArticle={() => setShowZennNewArticle(true)}
@@ -2070,7 +2061,7 @@ function App() {
       </div>{/* /app-body */}
       </div>{/* /main-column */}
 
-        {(terminalVisible || ragVisible) && (
+        {folderPanelVisible && (
           <>
             <div className="divider" onMouseDown={handleFolderPanelMouseDown} />
             <div
@@ -2078,31 +2069,30 @@ function App() {
               style={{ flex: `0 0 ${folderPanelRatio}%` }}
             >
               <div className="folder-panel-tabs">
-                {terminalVisible && (
-                  <button
-                    className={`folder-panel-tab ${folderPanelTab === "terminal" ? "active" : ""}`}
-                    onClick={() => setFolderPanelTab("terminal")}
-                  >
-                    ターミナル
-                  </button>
-                )}
-                {ragVisible && (
-                  <button
-                    className={`folder-panel-tab ${folderPanelTab === "rag" ? "active" : ""}`}
-                    onClick={() => setFolderPanelTab("rag")}
-                  >
-                    RAG
-                  </button>
-                )}
+                <button
+                  className={`folder-panel-tab ${folderPanelTab === "rag" ? "active" : ""}`}
+                  onClick={() => setFolderPanelTab("rag")}
+                >
+                  RAG
+                </button>
+                <button
+                  className={`folder-panel-tab ${folderPanelTab === "terminal" ? "active" : ""}`}
+                  onClick={() => setFolderPanelTab("terminal")}
+                >
+                  ターミナル
+                </button>
               </div>
-              <div className="folder-panel-body" style={{ display: folderPanelTab === "terminal" && terminalVisible ? "flex" : "none" }}>
-                <Terminal
-                  cwd={folderPath ?? "C:\\"}
-                  visible={terminalVisible && folderPanelTab === "terminal"}
-                  theme={theme}
-                />
+              <div className="folder-panel-body" style={{ display: folderPanelTab === "terminal" ? "flex" : "none" }}>
+                {openFolders.map((fp) => (
+                  <Terminal
+                    key={fp || "__new__"}
+                    cwd={fp || "C:\\"}
+                    visible={folderPanelVisible && folderPanelTab === "terminal" && (fp === (folderPath ?? ""))}
+                    theme={theme}
+                  />
+                ))}
               </div>
-              <div className="folder-panel-body" style={{ display: folderPanelTab === "rag" && ragVisible ? "flex" : "none" }}>
+              <div className="folder-panel-body" style={{ display: folderPanelTab === "rag" ? "flex" : "none" }}>
                 <RagPanel
                   folderPath={folderPath}
                   embeddingStatus={rag.embeddingStatus}

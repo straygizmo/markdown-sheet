@@ -9,8 +9,7 @@ interface Props {
   theme: "light" | "dark";
   activeViewTab: "preview" | "table";
   editorVisible: boolean;
-  terminalVisible: boolean;
-  ragVisible: boolean;
+  folderPanelVisible: boolean;
   recentFiles: RecentFile[];
   recentFolders: RecentFolder[];
   onOpenFolder: () => void;
@@ -25,8 +24,7 @@ interface Props {
   onToggleTheme: () => void;
   onPasteFromClipboard: () => void;
   onToggleEditor: () => void;
-  onToggleTerminal: () => void;
-  onToggleRag: () => void;
+  onToggleFolderPanel: () => void;
   onOpenSettings: () => void;
   isZennMode: boolean;
   onNewZennArticle?: () => void;
@@ -39,8 +37,7 @@ const Toolbar: FC<Props> = ({
   theme,
   activeViewTab,
   editorVisible,
-  terminalVisible,
-  ragVisible,
+  folderPanelVisible,
   recentFiles,
   recentFolders,
   onOpenFolder,
@@ -55,8 +52,7 @@ const Toolbar: FC<Props> = ({
   onToggleTheme,
   onPasteFromClipboard,
   onToggleEditor,
-  onToggleTerminal,
-  onToggleRag,
+  onToggleFolderPanel,
   onOpenSettings,
   isZennMode,
   onNewZennArticle,
@@ -196,18 +192,11 @@ const Toolbar: FC<Props> = ({
               ✍🏼 エディタ
             </button>
             <button
-              className={terminalVisible ? "toggle-active" : ""}
-              onClick={onToggleTerminal}
-              title={`ターミナルを${terminalVisible ? "非表示" : "表示"} (Ctrl+\`)`}
+              className={folderPanelVisible ? "toggle-active" : ""}
+              onClick={onToggleFolderPanel}
+              title={`フォルダツールを${folderPanelVisible ? "非表示" : "表示"}`}
             >
-              💻 ターミナル
-            </button>
-            <button
-              className={ragVisible ? "toggle-active" : ""}
-              onClick={onToggleRag}
-              title={`RAGを${ragVisible ? "非表示" : "表示"} (Ctrl+Shift+R)`}
-            >
-              💬 RAG
+              📂 フォルダツール
             </button>
           </>
         )}
