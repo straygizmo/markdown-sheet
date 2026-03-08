@@ -4,7 +4,7 @@ export function useDividerDrag(
   containerRef: React.RefObject<HTMLDivElement | null>,
   editorRatio: number,
   setEditorRatio: React.Dispatch<React.SetStateAction<number>>,
-  appBodyRef: React.RefObject<HTMLDivElement | null>,
+  folderContentRef: React.RefObject<HTMLDivElement | null>,
   terminalRatio: number,
   setTerminalRatio: React.Dispatch<React.SetStateAction<number>>,
 ) {
@@ -37,15 +37,15 @@ export function useDividerDrag(
   const handleTerminalMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      const body = appBodyRef.current;
-      if (!body) return;
+      const wrapper = folderContentRef.current;
+      if (!wrapper) return;
       const startX = e.clientX;
-      const bodyRect = body.getBoundingClientRect();
+      const wrapperRect = wrapper.getBoundingClientRect();
       const startRatio = terminalRatio;
 
       const handleMouseMove = (e: MouseEvent) => {
         const deltaX = startX - e.clientX;
-        const newRatio = startRatio + (deltaX / bodyRect.width) * 100;
+        const newRatio = startRatio + (deltaX / wrapperRect.width) * 100;
         setTerminalRatio(Math.max(10, Math.min(60, newRatio)));
       };
 
@@ -57,7 +57,7 @@ export function useDividerDrag(
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
     },
-    [terminalRatio, appBodyRef, setTerminalRatio]
+    [terminalRatio, folderContentRef, setTerminalRatio]
   );
 
   return { handleMouseDown, handleTerminalMouseDown } as const;

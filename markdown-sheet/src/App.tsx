@@ -183,6 +183,7 @@ function App() {
   const [ragVisible, setRagVisible] = useState(false);
   const [ragRatio, setRagRatio] = useState(25);
   const appBodyRef = useRef<HTMLDivElement>(null);
+  const folderContentRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const [showTableGrid, setShowTableGrid] = useState(false);
@@ -1514,21 +1515,21 @@ function App() {
 
   const { handleMouseDown, handleTerminalMouseDown } = useDividerDrag(
     containerRef, editorRatio, setEditorRatio,
-    appBodyRef, terminalRatio, setTerminalRatio,
+    folderContentRef, terminalRatio, setTerminalRatio,
   );
 
   const handleRagMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      const body = appBodyRef.current;
-      if (!body) return;
+      const wrapper = folderContentRef.current;
+      if (!wrapper) return;
       const startX = e.clientX;
-      const bodyRect = body.getBoundingClientRect();
+      const wrapperRect = wrapper.getBoundingClientRect();
       const startRatio = ragRatio;
 
       const handleMouseMove = (ev: MouseEvent) => {
         const deltaX = startX - ev.clientX;
-        const newRatio = startRatio + (deltaX / bodyRect.width) * 100;
+        const newRatio = startRatio + (deltaX / wrapperRect.width) * 100;
         setRagRatio(Math.max(10, Math.min(50, newRatio)));
       };
 
@@ -1540,7 +1541,7 @@ function App() {
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
     },
-    [ragRatio, appBodyRef]
+    [ragRatio, folderContentRef]
   );
 
   // --- Paste from clipboard ---
@@ -1878,6 +1879,23 @@ function App() {
         onCloseFolder={closeFolderTabs}
         onOpenFolderInExplorer={(folder) => invoke("open_external_url", { url: folder })}
         onBatchConvertDocx={batchConvertDocx}
+        part="folder"
+      />
+
+      <div className="folder-content-wrapper" ref={folderContentRef}>
+      <div className="main-column">
+      <TabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        activeFolderPath={activeFolderPath}
+        onSelectTab={switchToTab}
+        onCloseTab={closeTab}
+        onNewTab={openNewTab}
+        onSelectFolder={switchToFolder}
+        onCloseFolder={closeFolderTabs}
+        onOpenFolderInExplorer={(folder) => invoke("open_external_url", { url: folder })}
+        onBatchConvertDocx={batchConvertDocx}
+        part="file"
       />
 
       {showSearch && (
@@ -2058,6 +2076,9 @@ function App() {
           </div>
         )}
 
+      </div>{/* /app-body */}
+      </div>{/* /main-column */}
+
         {terminalVisible && (
           <>
             <div className="divider" onMouseDown={handleTerminalMouseDown} />
@@ -2107,7 +2128,7 @@ function App() {
             </div>
           </>
         )}
-      </div>
+      </div>{/* /folder-content-wrapper */}
 
       <StatusBar
         content={content}

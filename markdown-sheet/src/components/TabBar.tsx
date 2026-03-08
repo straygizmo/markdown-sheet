@@ -14,6 +14,8 @@ interface Props {
   onCloseFolder: (folder: string) => void;
   onOpenFolderInExplorer: (folder: string) => void;
   onBatchConvertDocx: (folder: string) => void;
+  /** Render only folder tabs ("folder"), only file tabs ("file"), or both (undefined) */
+  part?: "folder" | "file";
 }
 
 function getFolderDisplayName(folderPath: string): string {
@@ -32,6 +34,7 @@ const TabBar: FC<Props> = ({
   onCloseFolder,
   onOpenFolderInExplorer,
   onBatchConvertDocx,
+  part,
 }) => {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; folder: string } | null>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
@@ -79,9 +82,8 @@ const TabBar: FC<Props> = ({
     return map;
   }, [tabs]);
 
-  return (
-    <div className="tab-bar-container">
-      {/* フォルダタブ（上段） */}
+  const folderTabsContent = (
+    <>
       <div className="folder-tab-bar">
         {folderOrder.map((folder) => {
           const isActive = folder === activeFolderPath;
@@ -120,49 +122,6 @@ const TabBar: FC<Props> = ({
           );
         })}
       </div>
-
-      {/* ファイルタブ（下段） */}
-      <div className="file-tab-bar">
-        {activeFolderTabs.map((tab) => {
-          const name = tab.filePath
-            ? tab.filePath.split(/[\\/]/).pop() ?? "無題"
-            : "無題";
-          const isActive = tab.id === activeTabId;
-          return (
-            <div
-              key={tab.id}
-              className={`tab-item ${isActive ? "active" : ""}`}
-              onClick={() => onSelectTab(tab.id)}
-              title={tab.filePath ?? "保存されていない新規ファイル"}
-            >
-              <span className="tab-label">
-                {name.endsWith(".md") ? "📄 " : name.endsWith(".docx") ? "📘 " : name.match(/\.xls.?$/) ? "📗 " : name.endsWith(".km") ? "💡 " : name.endsWith(".xmind") ? "📕 " : ""}{name}
-                {tab.dirty ? " *" : ""}
-              </span>
-              <button
-                type="button"
-                className="tab-close-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  if (tab.dirty) {
-                    if (!window.confirm(`"${name}" の変更は保存されていません。閉じますか？`)) return;
-                  }
-                  onCloseTab(tab.id);
-                }}
-                title="タブを閉じる"
-                disabled={tabs.length <= 1}
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
-        <button className="tab-new-btn" onClick={onNewTab} title="新しいタブ">
-          +
-        </button>
-      </div>
-
       {ctxMenu && (
         <div
           ref={ctxRef}
@@ -185,6 +144,59 @@ const TabBar: FC<Props> = ({
           </div>
         </div>
       )}
+    </>
+  );
+
+  const fileTabsContent = (
+    <div className="file-tab-bar">
+      {activeFolderTabs.map((tab) => {
+        const name = tab.filePath
+          ? tab.filePath.split(/[\\/]/).pop() ?? "無題"
+          : "無題";
+        const isActive = tab.id === activeTabId;
+        return (
+          <div
+            key={tab.id}
+            className={`tab-item ${isActive ? "active" : ""}`}
+            onClick={() => onSelectTab(tab.id)}
+            title={tab.filePath ?? "保存されていない新規ファイル"}
+          >
+            <span className="tab-label">
+              {name.endsWith(".md") ? "📄 " : name.endsWith(".docx") ? "📘 " : name.match(/\.xls.?$/) ? "📗 " : name.endsWith(".km") ? "💡 " : name.endsWith(".xmind") ? "📕 " : ""}{name}
+              {tab.dirty ? " *" : ""}
+            </span>
+            <button
+              type="button"
+              className="tab-close-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (tab.dirty) {
+                  if (!window.confirm(`"${name}" の変更は保存されていません。閉じますか？`)) return;
+                }
+                onCloseTab(tab.id);
+              }}
+              title="タブを閉じる"
+              disabled={tabs.length <= 1}
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
+      <button className="tab-new-btn" onClick={onNewTab} title="新しいタブ">
+        +
+      </button>
+    </div>
+  );
+
+  if (part === "folder") return folderTabsContent;
+  if (part === "file") return fileTabsContent;
+
+  return (
+    <div className="tab-bar-container">
+      {folderTabsContent}
+      {fileTabsContent}
     </div>
   );
 };
