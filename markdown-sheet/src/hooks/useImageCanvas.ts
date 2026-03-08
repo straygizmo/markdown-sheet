@@ -3,6 +3,22 @@ import * as fabric from "fabric";
 
 export type ImageTool = "select" | "text" | "rect" | "circle" | "arrow" | "line" | "pen" | "ocr";
 
+export const FONT_FAMILIES = [
+  "sans-serif",
+  "serif",
+  "monospace",
+  "Arial",
+  "Helvetica",
+  "Times New Roman",
+  "Courier New",
+  "Georgia",
+  "MS Gothic",
+  "MS Mincho",
+  "Meiryo",
+];
+
+export const FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64];
+
 const MAX_UNDO = 50;
 
 export function useImageCanvas() {
@@ -12,6 +28,11 @@ export function useImageCanvas() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [strokeColor, setStrokeColor] = useState("#ff0000");
+  const [fillColor, setFillColor] = useState("transparent");
+  const [fontSize, setFontSize] = useState(20);
+  const [fontFamily, setFontFamily] = useState("sans-serif");
+  const [strokeWidth, setStrokeWidth] = useState(2);
 
   const undoStack = useRef<string[]>([]);
   const redoStack = useRef<string[]>([]);
@@ -219,8 +240,8 @@ export function useImageCanvas() {
     if (activeTool === "pen") {
       c.isDrawingMode = true;
       c.freeDrawingBrush = new fabric.PencilBrush(c);
-      c.freeDrawingBrush.width = 2;
-      c.freeDrawingBrush.color = "#ff0000";
+      c.freeDrawingBrush.width = strokeWidth;
+      c.freeDrawingBrush.color = strokeColor;
     } else if (activeTool !== "select") {
       c.selection = false;
       c.defaultCursor = "crosshair";
@@ -264,9 +285,9 @@ export function useImageCanvas() {
         const text = new fabric.IText("テキスト", {
           left: pointer.x,
           top: pointer.y,
-          fontSize: 20,
-          fill: "#ff0000",
-          fontFamily: "sans-serif",
+          fontSize,
+          fill: strokeColor,
+          fontFamily,
         });
         c.add(text);
         c.setActiveObject(text);
@@ -280,21 +301,21 @@ export function useImageCanvas() {
         obj = new fabric.Rect({
           left: pointer.x, top: pointer.y, width: 0, height: 0,
           originX: "left", originY: "top",
-          fill: "transparent", stroke: "#ff0000", strokeWidth: 2,
+          fill: fillColor, stroke: strokeColor, strokeWidth,
         });
       } else if (activeTool === "circle") {
         obj = new fabric.Ellipse({
           left: pointer.x, top: pointer.y, rx: 0, ry: 0,
           originX: "left", originY: "top",
-          fill: "transparent", stroke: "#ff0000", strokeWidth: 2,
+          fill: fillColor, stroke: strokeColor, strokeWidth,
         });
       } else if (activeTool === "line") {
         obj = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-          stroke: "#ff0000", strokeWidth: 2,
+          stroke: strokeColor, strokeWidth,
         });
       } else if (activeTool === "arrow") {
         obj = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-          stroke: "#ff0000", strokeWidth: 2,
+          stroke: strokeColor, strokeWidth,
         });
       } else {
         return;
@@ -351,7 +372,7 @@ export function useImageCanvas() {
           { x: x2 - headLen * Math.cos(angle + Math.PI / 6), y: y2 - headLen * Math.sin(angle + Math.PI / 6) },
         ];
         const head = new fabric.Polygon(points.map(p => new fabric.Point(p.x, p.y)), {
-          fill: "#ff0000", stroke: "#ff0000", strokeWidth: 1,
+          fill: strokeColor, stroke: strokeColor, strokeWidth: 1,
           selectable: false, evented: false,
         });
         c.add(head);
@@ -376,7 +397,7 @@ export function useImageCanvas() {
       c.off("mouse:up", handleMouseUp);
       c.off("path:created", handlePathCreated);
     };
-  }, [activeTool, pushUndo]);
+  }, [activeTool, pushUndo, strokeColor, fillColor, fontSize, fontFamily, strokeWidth]);
 
   // Delete selected objects
   const deleteSelected = useCallback(() => {
@@ -432,5 +453,15 @@ export function useImageCanvas() {
     setOcrRegionCallback,
     clearOcrRect,
     deleteSelected,
+    strokeColor,
+    setStrokeColor,
+    fillColor,
+    setFillColor,
+    fontSize,
+    setFontSize,
+    fontFamily,
+    setFontFamily,
+    strokeWidth,
+    setStrokeWidth,
   };
 }

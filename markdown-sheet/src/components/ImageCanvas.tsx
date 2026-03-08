@@ -30,6 +30,16 @@ const ImageCanvas: FC<Props> = ({ imageBlobUrl }) => {
     setOcrRegionCallback,
     clearOcrRect,
     deleteSelected,
+    strokeColor,
+    setStrokeColor,
+    fillColor,
+    setFillColor,
+    fontSize,
+    setFontSize,
+    fontFamily,
+    setFontFamily,
+    strokeWidth,
+    setStrokeWidth,
   } = useImageCanvas();
 
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -141,7 +151,16 @@ const ImageCanvas: FC<Props> = ({ imageBlobUrl }) => {
         onSave={saveImage}
         onOcr={handleOcr}
         ocrLoading={ocrLoading}
-        onDelete={deleteSelected}
+        strokeColor={strokeColor}
+        onStrokeColorChange={setStrokeColor}
+        fillColor={fillColor}
+        onFillColorChange={setFillColor}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+        fontFamily={fontFamily}
+        onFontFamilyChange={setFontFamily}
+        strokeWidth={strokeWidth}
+        onStrokeWidthChange={setStrokeWidth}
       />
       <div className="image-canvas-container" ref={containerElRef}>
         <div className="image-canvas-wrapper">
