@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { mkdir, readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import AiGenerateModal from "./components/AiGenerateModal";
@@ -40,7 +40,7 @@ function App() {
   // --- Extracted hooks ---
   const { theme, toggleTheme } = useTheme();
   const { toast, showToast } = useToast();
-  const { recentFiles, addRecentFile, recentFolders, addRecentFolder } = useRecentItems();
+  const { recentFiles, addRecentFile, removeRecentFile, recentFolders, addRecentFolder, removeRecentFolder } = useRecentItems();
 
   // --- Tabs ---
   const initialTab = makeInitialTab();
@@ -1027,9 +1027,21 @@ function App() {
       openFolderAndActivateTab(path, entries);
     } catch (e) {
       console.error("フォルダ読み込みエラー:", e);
-      showToast("フォルダを開けませんでした", true);
+      removeRecentFolder(path);
+      showToast("フォルダが見つからないため履歴から削除しました", true);
     }
-  }, [filterDocx, filterXls, filterKm, filterImages, isZennMode, openFolderAndActivateTab, showToast]);
+  }, [filterDocx, filterXls, filterKm, filterImages, isZennMode, openFolderAndActivateTab, removeRecentFolder, showToast]);
+
+  // --- Open recent file ---
+  const handleOpenRecentFile = useCallback(async (path: string) => {
+    const fileExists = await exists(path);
+    if (!fileExists) {
+      removeRecentFile(path);
+      showToast("ファイルが見つからないため履歴から削除しました", true);
+      return;
+    }
+    await loadFile(path);
+  }, [loadFile, removeRecentFile, showToast]);
 
   // --- File open ---
   const handleOpenFile = useCallback(async () => {
@@ -1765,7 +1777,7 @@ function App() {
         onOpenFolder={handleOpenFolder}
         onOpenRecentFolder={handleOpenRecentFolder}
         onOpenFile={handleOpenFile}
-        onOpenRecent={loadFile}
+        onOpenRecent={handleOpenRecentFile}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
         onUndo={handleUndo}

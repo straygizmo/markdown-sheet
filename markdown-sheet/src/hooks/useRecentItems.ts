@@ -34,5 +34,21 @@ export function useRecentItems() {
     });
   }, []);
 
-  return { recentFiles, addRecentFile, recentFolders, addRecentFolder } as const;
+  const removeRecentFile = useCallback((filePath: string) => {
+    setRecentFiles((prev) => {
+      const next = prev.filter((f) => f.path !== filePath);
+      localStorage.setItem("md-recent-files", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const removeRecentFolder = useCallback((folderPath: string) => {
+    setRecentFolders((prev) => {
+      const next = prev.filter((f) => f.path !== folderPath);
+      localStorage.setItem("md-recent-folders", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  return { recentFiles, addRecentFile, removeRecentFile, recentFolders, addRecentFolder, removeRecentFolder } as const;
 }
