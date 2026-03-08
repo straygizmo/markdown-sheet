@@ -1804,6 +1804,7 @@ function App() {
         onNewTab={openNewTab}
         onSelectFolder={switchToFolder}
         onCloseFolder={closeFolderTabs}
+        onOpenFolderInExplorer={(folder) => invoke("open_external_url", { url: folder })}
       />
 
       {showSearch && (

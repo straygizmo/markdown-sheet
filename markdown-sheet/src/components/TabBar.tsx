@@ -11,6 +11,7 @@ interface Props {
   onNewTab: () => void;
   onSelectFolder: (folder: string) => void;
   onCloseFolder: (folder: string) => void;
+  onOpenFolderInExplorer: (folder: string) => void;
 }
 
 function getFolderDisplayName(folderPath: string): string {
@@ -27,6 +28,7 @@ const TabBar: FC<Props> = ({
   onNewTab,
   onSelectFolder,
   onCloseFolder,
+  onOpenFolderInExplorer,
 }) => {
   // フォルダごとにタブをグループ化（出現順を保持）
   const folderOrder = useMemo(() => {
@@ -68,6 +70,7 @@ const TabBar: FC<Props> = ({
               key={folder}
               className={`folder-tab-item ${isActive ? "active" : ""}`}
               onClick={() => onSelectFolder(folder)}
+              onDoubleClick={() => { if (folder) onOpenFolderInExplorer(folder); }}
               title={folder || "保存されていない新規ファイル"}
             >
               <span className="folder-tab-label">
