@@ -986,7 +986,8 @@ function App() {
     setOfficeFileType(null);
     setMindmapFileData(null);
     setMindmapFileType(null);
-  }, [addRecentFolder, switchToTab, saveCurrentToTab, reset]);
+    clearImagePreview();
+  }, [addRecentFolder, switchToTab, saveCurrentToTab, reset, clearImagePreview]);
 
   // --- Folder open ---
   const handleOpenFolder = useCallback(async () => {
