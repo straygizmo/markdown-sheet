@@ -7,6 +7,7 @@ import "./App.css";
 import AiGenerateModal from "./components/AiGenerateModal";
 import ZennNewArticleDialog from "./components/ZennNewArticleDialog";
 import EditorPanel from "./components/EditorPanel";
+import ImageCanvas from "./components/ImageCanvas";
 import LeftPanel from "./components/LeftPanel";
 import MindmapEditor, { type MindmapEditorHandle } from "./components/MindmapEditor";
 import PreviewPanel from "./components/PreviewPanel";
@@ -1884,11 +1885,7 @@ function App() {
           </div>
         ) : isImageFile ? (
           <div className="content-area image-preview-area">
-            <img
-              src={imageBlobUrl!}
-              alt={activeFile?.replace(/^.*[\\/]/, "") ?? ""}
-              className="image-preview-img"
-            />
+            <ImageCanvas imageBlobUrl={imageBlobUrl!} />
           </div>
         ) : (
           <div
