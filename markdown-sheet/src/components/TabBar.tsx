@@ -1,5 +1,6 @@
-import { type FC, useMemo } from "react";
+import { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tab } from "../types";
+import "./ContextMenu.css";
 import "./TabBar.css";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
   onSelectFolder: (folder: string) => void;
   onCloseFolder: (folder: string) => void;
   onOpenFolderInExplorer: (folder: string) => void;
+  onBatchConvertDocx: (folder: string) => void;
 }
 
 function getFolderDisplayName(folderPath: string): string {
@@ -29,7 +31,26 @@ const TabBar: FC<Props> = ({
   onSelectFolder,
   onCloseFolder,
   onOpenFolderInExplorer,
+  onBatchConvertDocx,
 }) => {
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; folder: string } | null>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
+
+  const closeCtx = useCallback(() => setCtxMenu(null), []);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) closeCtx();
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeCtx(); };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [ctxMenu, closeCtx]);
   // フォルダごとにタブをグループ化（出現順を保持）
   const folderOrder = useMemo(() => {
     const seen = new Set<string>();
@@ -71,6 +92,11 @@ const TabBar: FC<Props> = ({
               className={`folder-tab-item ${isActive ? "active" : ""}`}
               onClick={() => onSelectFolder(folder)}
               onDoubleClick={() => { if (folder) onOpenFolderInExplorer(folder); }}
+              onContextMenu={(e) => {
+                if (!folder) return;
+                e.preventDefault();
+                setCtxMenu({ x: e.clientX, y: e.clientY, folder });
+              }}
               title={folder || "保存されていない新規ファイル"}
             >
               <span className="folder-tab-label">
@@ -136,6 +162,29 @@ const TabBar: FC<Props> = ({
           +
         </button>
       </div>
+
+      {ctxMenu && (
+        <div
+          ref={ctxRef}
+          className="context-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+        >
+          <div className="ctx-group">
+            <button
+              type="button"
+              onClick={() => { onOpenFolderInExplorer(ctxMenu.folder); closeCtx(); }}
+            >
+              <span className="ctx-label">エクスプローラーで開く</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { onBatchConvertDocx(ctxMenu.folder); closeCtx(); }}
+            >
+              <span className="ctx-label">.docx → .md 一括変換</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

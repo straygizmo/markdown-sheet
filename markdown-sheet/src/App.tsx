@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { exists, mkdir, readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readDir, readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import AiGenerateModal from "./components/AiGenerateModal";
@@ -1564,6 +1564,32 @@ function App() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  // --- .docx → .md 一括変換 ---
+  const batchConvertDocx = useCallback(async (folder: string) => {
+    try {
+      const { docxToMarkdown } = await import("./lib/docxToMarkdown");
+      const entries = await readDir(folder);
+      const docxFiles = entries.filter(
+        (e) => !e.isDirectory && e.name.toLowerCase().endsWith(".docx")
+      );
+      if (docxFiles.length === 0) {
+        showToast(".docx ファイルが見つかりません");
+        return;
+      }
+      let converted = 0;
+      for (const entry of docxFiles) {
+        const fullPath = `${folder}/${entry.name}`;
+        const data = await readFile(fullPath);
+        await docxToMarkdown(new Uint8Array(data), fullPath);
+        converted++;
+      }
+      showToast(`${converted} 件の .docx を .md に変換しました`);
+      if (refreshFileTree) refreshFileTree();
+    } catch (err) {
+      showToast(`変換エラー: ${err}`);
+    }
+  }, [showToast, refreshFileTree]);
+
   // --- File drag & drop (Tauri ネイティブ API) ---
   const loadFileRef = useRef(loadFile);
   loadFileRef.current = loadFile;
@@ -1805,6 +1831,7 @@ function App() {
         onSelectFolder={switchToFolder}
         onCloseFolder={closeFolderTabs}
         onOpenFolderInExplorer={(folder) => invoke("open_external_url", { url: folder })}
+        onBatchConvertDocx={batchConvertDocx}
       />
 
       {showSearch && (
