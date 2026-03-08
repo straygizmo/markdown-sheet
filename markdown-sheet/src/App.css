@@ -254,6 +254,16 @@ body {
   flex-shrink: 0;
 }
 
+/* ========== RAG Panel ========== */
+.rag-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+  background: var(--bg-base);
+}
+
 /* ========== Toast ========== */
 .toast {
   position: fixed;

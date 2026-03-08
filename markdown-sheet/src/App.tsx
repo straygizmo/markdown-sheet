@@ -16,9 +16,11 @@ import Settings from "./components/Settings";
 import StatusBar from "./components/StatusBar";
 import TabBar from "./components/TabBar";
 import TableEditor from "./components/TableEditor";
+import RagPanel from "./components/RagPanel";
 import Terminal from "./components/Terminal";
 import Toolbar from "./components/Toolbar";
 import { useAiFeatures } from "./hooks/useAiFeatures";
+import { useRagFeatures } from "./hooks/useRagFeatures";
 import { useDividerDrag } from "./hooks/useDividerDrag";
 import { useEditorFormatting } from "./hooks/useEditorFormatting";
 import { useExport } from "./hooks/useExport";
@@ -178,6 +180,8 @@ function App() {
   const [editorRatio, setEditorRatio] = useState(40);
   const containerRef = useRef<HTMLDivElement>(null);
   const [terminalRatio, setTerminalRatio] = useState(30);
+  const [ragVisible, setRagVisible] = useState(false);
+  const [ragRatio, setRagRatio] = useState(25);
   const appBodyRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -1495,9 +1499,48 @@ function App() {
     showToast,
   });
 
+  const rag = useRagFeatures(aiSettings, showToast);
+
+  // Check RAG status when folder changes
+  useEffect(() => {
+    if (folderPath) {
+      rag.checkStatus(folderPath);
+    }
+  }, [folderPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRagOpenFile = useCallback((filePath: string, _line?: number) => {
+    loadFile(filePath);
+  }, [loadFile]);
+
   const { handleMouseDown, handleTerminalMouseDown } = useDividerDrag(
     containerRef, editorRatio, setEditorRatio,
     appBodyRef, terminalRatio, setTerminalRatio,
+  );
+
+  const handleRagMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const body = appBodyRef.current;
+      if (!body) return;
+      const startX = e.clientX;
+      const bodyRect = body.getBoundingClientRect();
+      const startRatio = ragRatio;
+
+      const handleMouseMove = (ev: MouseEvent) => {
+        const deltaX = startX - ev.clientX;
+        const newRatio = startRatio + (deltaX / bodyRect.width) * 100;
+        setRagRatio(Math.max(10, Math.min(50, newRatio)));
+      };
+
+      const handleMouseUp = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [ragRatio, appBodyRef]
   );
 
   // --- Paste from clipboard ---
@@ -1767,6 +1810,7 @@ function App() {
     setShowSearch,
     setEditorVisible,
     setTerminalVisible,
+    setRagVisible,
     tabsRef,
     activeTabIdRef,
   });
@@ -1814,8 +1858,10 @@ function App() {
         onToggleTheme={toggleTheme}
         onPasteFromClipboard={handlePasteFromClipboard}
         terminalVisible={terminalVisible}
+        ragVisible={ragVisible}
         onToggleEditor={() => setEditorVisible((v) => !v)}
         onToggleTerminal={() => setTerminalVisible((v) => !v)}
+        onToggleRag={() => setRagVisible((v) => !v)}
         onOpenSettings={() => setShowSettings(true)}
         isZennMode={isZennMode}
         onNewZennArticle={() => setShowZennNewArticle(true)}
@@ -2026,6 +2072,37 @@ function App() {
                 cwd={folderPath ?? "C:\\"}
                 visible={terminalVisible}
                 theme={theme}
+              />
+            </div>
+          </>
+        )}
+
+        {ragVisible && (
+          <>
+            <div className="divider" onMouseDown={handleRagMouseDown} />
+            <div
+              className="rag-panel"
+              style={{ flex: `0 0 ${ragRatio}%` }}
+            >
+              <div className="terminal-panel-header">
+                <span>RAG</span>
+              </div>
+              <RagPanel
+                folderPath={folderPath}
+                embeddingStatus={rag.embeddingStatus}
+                embeddingProgress={rag.embeddingProgress}
+                embeddingError={rag.embeddingError}
+                indexStatus={rag.indexStatus}
+                indexInfo={rag.indexInfo}
+                indexProgress={rag.indexProgress}
+                messages={rag.messages}
+                querying={rag.querying}
+                onBuildIndex={rag.buildIndex}
+                onDeleteIndex={rag.deleteIndex}
+                onAskQuestion={rag.askQuestion}
+                onClearMessages={rag.clearMessages}
+                onLoadModel={rag.loadModel}
+                onOpenFile={handleRagOpenFile}
               />
             </div>
           </>

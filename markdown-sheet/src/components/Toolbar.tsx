@@ -10,6 +10,7 @@ interface Props {
   activeViewTab: "preview" | "table";
   editorVisible: boolean;
   terminalVisible: boolean;
+  ragVisible: boolean;
   recentFiles: RecentFile[];
   recentFolders: RecentFolder[];
   onOpenFolder: () => void;
@@ -25,6 +26,7 @@ interface Props {
   onPasteFromClipboard: () => void;
   onToggleEditor: () => void;
   onToggleTerminal: () => void;
+  onToggleRag: () => void;
   onOpenSettings: () => void;
   isZennMode: boolean;
   onNewZennArticle?: () => void;
@@ -38,6 +40,7 @@ const Toolbar: FC<Props> = ({
   activeViewTab,
   editorVisible,
   terminalVisible,
+  ragVisible,
   recentFiles,
   recentFolders,
   onOpenFolder,
@@ -53,6 +56,7 @@ const Toolbar: FC<Props> = ({
   onPasteFromClipboard,
   onToggleEditor,
   onToggleTerminal,
+  onToggleRag,
   onOpenSettings,
   isZennMode,
   onNewZennArticle,
@@ -197,6 +201,13 @@ const Toolbar: FC<Props> = ({
               title={`ターミナルを${terminalVisible ? "非表示" : "表示"} (Ctrl+\`)`}
             >
               💻 ターミナル
+            </button>
+            <button
+              className={ragVisible ? "toggle-active" : ""}
+              onClick={onToggleRag}
+              title={`RAGを${ragVisible ? "非表示" : "表示"} (Ctrl+Shift+R)`}
+            >
+              💬 RAG
             </button>
           </>
         )}

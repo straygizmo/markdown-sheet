@@ -2,10 +2,12 @@ pub mod commands;
 pub mod file_watcher;
 pub mod markdown_parser;
 pub mod pty_manager;
+pub mod rag_store;
 
 use commands::{get_file_tree, read_markdown_file, save_markdown_file, detect_zenn_project, get_zenn_articles_meta, git_init, git_status, git_add_all, git_commit, git_push, git_get_remote_url, git_set_remote_url, open_external_url};
 use file_watcher::{watch_file, unwatch_file, FileWatcherState};
 use pty_manager::{kill_pty, resize_pty, spawn_pty, write_to_pty, PtyManager};
+use rag_store::{rag_scan_folder, rag_save_chunks, rag_search, rag_get_status, rag_delete_index};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
@@ -36,6 +38,11 @@ pub fn run() {
             open_external_url,
             watch_file,
             unwatch_file,
+            rag_scan_folder,
+            rag_save_chunks,
+            rag_search,
+            rag_get_status,
+            rag_delete_index,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

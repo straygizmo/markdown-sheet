@@ -13,6 +13,7 @@ interface UseKeyboardShortcutsParams {
   setShowSearch: React.Dispatch<React.SetStateAction<boolean>>;
   setEditorVisible: React.Dispatch<React.SetStateAction<boolean>>;
   setTerminalVisible: React.Dispatch<React.SetStateAction<boolean>>;
+  setRagVisible: React.Dispatch<React.SetStateAction<boolean>>;
   tabsRef: React.MutableRefObject<Tab[]>;
   activeTabIdRef: React.MutableRefObject<string>;
 }
@@ -29,6 +30,7 @@ export function useKeyboardShortcuts({
   setShowSearch,
   setEditorVisible,
   setTerminalVisible,
+  setRagVisible,
   tabsRef,
   activeTabIdRef,
 }: UseKeyboardShortcutsParams) {
@@ -61,6 +63,9 @@ export function useKeyboardShortcuts({
       } else if (e.ctrlKey && e.key === "`") {
         e.preventDefault();
         setTerminalVisible((v) => !v);
+      } else if (e.ctrlKey && e.shiftKey && e.key === "R") {
+        e.preventDefault();
+        setRagVisible((v) => !v);
       } else if (e.ctrlKey && e.key === "t") {
         e.preventDefault();
         openNewTab();
@@ -88,6 +93,7 @@ export function useKeyboardShortcuts({
     setShowSearch,
     setEditorVisible,
     setTerminalVisible,
+    setRagVisible,
     tabsRef,
     activeTabIdRef,
   ]);

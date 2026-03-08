@@ -21,6 +21,8 @@ portable-pty = "0.8"
 notify = "7"
 notify-debouncer-mini = "0.5"
 base64 = "0.22"
+rusqlite = { version = "0.31", features = ["bundled"] }
+sha2 = "0.10"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
