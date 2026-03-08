@@ -14,6 +14,8 @@ interface UseKeyboardShortcutsParams {
   setEditorVisible: React.Dispatch<React.SetStateAction<boolean>>;
   setTerminalVisible: React.Dispatch<React.SetStateAction<boolean>>;
   setRagVisible: React.Dispatch<React.SetStateAction<boolean>>;
+  folderPanelTab: "terminal" | "rag";
+  setFolderPanelTab: React.Dispatch<React.SetStateAction<"terminal" | "rag">>;
   tabsRef: React.MutableRefObject<Tab[]>;
   activeTabIdRef: React.MutableRefObject<string>;
 }
@@ -31,6 +33,8 @@ export function useKeyboardShortcuts({
   setEditorVisible,
   setTerminalVisible,
   setRagVisible,
+  folderPanelTab,
+  setFolderPanelTab,
   tabsRef,
   activeTabIdRef,
 }: UseKeyboardShortcutsParams) {
@@ -62,10 +66,18 @@ export function useKeyboardShortcuts({
         setEditorVisible((v) => !v);
       } else if (e.ctrlKey && e.key === "`") {
         e.preventDefault();
-        setTerminalVisible((v) => !v);
+        setTerminalVisible((v) => {
+          if (v && folderPanelTab === "terminal") return false;
+          setFolderPanelTab("terminal");
+          return true;
+        });
       } else if (e.ctrlKey && e.shiftKey && e.key === "R") {
         e.preventDefault();
-        setRagVisible((v) => !v);
+        setRagVisible((v) => {
+          if (v && folderPanelTab === "rag") return false;
+          setFolderPanelTab("rag");
+          return true;
+        });
       } else if (e.ctrlKey && e.key === "t") {
         e.preventDefault();
         openNewTab();
@@ -94,6 +106,8 @@ export function useKeyboardShortcuts({
     setEditorVisible,
     setTerminalVisible,
     setRagVisible,
+    folderPanelTab,
+    setFolderPanelTab,
     tabsRef,
     activeTabIdRef,
   ]);

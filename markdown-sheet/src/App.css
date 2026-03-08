@@ -243,8 +243,8 @@ body {
   background-color: var(--primary);
 }
 
-/* ========== Terminal Panel ========== */
-.terminal-panel {
+/* ========== Folder-level Panel (Terminal / RAG) ========== */
+.folder-panel {
   display: flex;
   flex-direction: column;
   min-width: 200px;
@@ -253,29 +253,39 @@ body {
   background: var(--bg-base);
 }
 
-.terminal-panel-header {
+.folder-panel-tabs {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
+  gap: 0;
   background: var(--bg-overlay);
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
-/* ========== RAG Panel ========== */
-.rag-panel {
-  display: flex;
+.folder-panel-tab {
+  padding: 6px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.folder-panel-tab:hover {
+  color: var(--text-primary);
+}
+
+.folder-panel-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.folder-panel-body {
+  flex: 1;
   flex-direction: column;
-  min-width: 200px;
   overflow: hidden;
-  border-left: 1px solid var(--border);
-  background: var(--bg-base);
 }
 
 /* ========== Toast ========== */

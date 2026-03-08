@@ -65,6 +65,7 @@ function App() {
   const [activeViewTab, setActiveViewTab] = useState<ViewTab>("preview");
   const [editorVisible, setEditorVisible] = useState(true);
   const [terminalVisible, setTerminalVisible] = useState(false);
+  const [folderPanelTab, setFolderPanelTab] = useState<"terminal" | "rag">("terminal");
   const [leftPanel, setLeftPanel] = useState<"folder" | "outline">("folder");
   const [showSettings, setShowSettings] = useState(false);
 
@@ -179,9 +180,8 @@ function App() {
   // --- Editor pane ---
   const [editorRatio, setEditorRatio] = useState(40);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [terminalRatio, setTerminalRatio] = useState(30);
   const [ragVisible, setRagVisible] = useState(false);
-  const [ragRatio, setRagRatio] = useState(25);
+  const [folderPanelRatio, setFolderPanelRatio] = useState(25);
   const appBodyRef = useRef<HTMLDivElement>(null);
   const folderContentRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -1513,36 +1513,11 @@ function App() {
     loadFile(filePath);
   }, [loadFile]);
 
-  const { handleMouseDown, handleTerminalMouseDown } = useDividerDrag(
+  const { handleMouseDown, handleTerminalMouseDown: handleFolderPanelMouseDown } = useDividerDrag(
     containerRef, editorRatio, setEditorRatio,
-    folderContentRef, terminalRatio, setTerminalRatio,
+    folderContentRef, folderPanelRatio, setFolderPanelRatio,
   );
 
-  const handleRagMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const wrapper = folderContentRef.current;
-      if (!wrapper) return;
-      const startX = e.clientX;
-      const wrapperRect = wrapper.getBoundingClientRect();
-      const startRatio = ragRatio;
-
-      const handleMouseMove = (ev: MouseEvent) => {
-        const deltaX = startX - ev.clientX;
-        const newRatio = startRatio + (deltaX / wrapperRect.width) * 100;
-        setRagRatio(Math.max(10, Math.min(50, newRatio)));
-      };
-
-      const handleMouseUp = () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    },
-    [ragRatio, folderContentRef]
-  );
 
   // --- Paste from clipboard ---
   const handlePasteFromClipboard = useCallback(async () => {
@@ -1812,6 +1787,8 @@ function App() {
     setEditorVisible,
     setTerminalVisible,
     setRagVisible,
+    folderPanelTab,
+    setFolderPanelTab,
     tabsRef,
     activeTabIdRef,
   });
@@ -1861,8 +1838,22 @@ function App() {
         terminalVisible={terminalVisible}
         ragVisible={ragVisible}
         onToggleEditor={() => setEditorVisible((v) => !v)}
-        onToggleTerminal={() => setTerminalVisible((v) => !v)}
-        onToggleRag={() => setRagVisible((v) => !v)}
+        onToggleTerminal={() => {
+          if (terminalVisible && folderPanelTab === "terminal") {
+            setTerminalVisible(false);
+          } else {
+            setTerminalVisible(true);
+            setFolderPanelTab("terminal");
+          }
+        }}
+        onToggleRag={() => {
+          if (ragVisible && folderPanelTab === "rag") {
+            setRagVisible(false);
+          } else {
+            setRagVisible(true);
+            setFolderPanelTab("rag");
+          }
+        }}
         onOpenSettings={() => setShowSettings(true)}
         isZennMode={isZennMode}
         onNewZennArticle={() => setShowZennNewArticle(true)}
@@ -2079,52 +2070,57 @@ function App() {
       </div>{/* /app-body */}
       </div>{/* /main-column */}
 
-        {terminalVisible && (
+        {(terminalVisible || ragVisible) && (
           <>
-            <div className="divider" onMouseDown={handleTerminalMouseDown} />
+            <div className="divider" onMouseDown={handleFolderPanelMouseDown} />
             <div
-              className="terminal-panel"
-              style={{ flex: `0 0 ${terminalRatio}%` }}
+              className="folder-panel"
+              style={{ flex: `0 0 ${folderPanelRatio}%` }}
             >
-              <div className="terminal-panel-header">
-                <span>ターミナル</span>
+              <div className="folder-panel-tabs">
+                {terminalVisible && (
+                  <button
+                    className={`folder-panel-tab ${folderPanelTab === "terminal" ? "active" : ""}`}
+                    onClick={() => setFolderPanelTab("terminal")}
+                  >
+                    ターミナル
+                  </button>
+                )}
+                {ragVisible && (
+                  <button
+                    className={`folder-panel-tab ${folderPanelTab === "rag" ? "active" : ""}`}
+                    onClick={() => setFolderPanelTab("rag")}
+                  >
+                    RAG
+                  </button>
+                )}
               </div>
-              <Terminal
-                cwd={folderPath ?? "C:\\"}
-                visible={terminalVisible}
-                theme={theme}
-              />
-            </div>
-          </>
-        )}
-
-        {ragVisible && (
-          <>
-            <div className="divider" onMouseDown={handleRagMouseDown} />
-            <div
-              className="rag-panel"
-              style={{ flex: `0 0 ${ragRatio}%` }}
-            >
-              <div className="terminal-panel-header">
-                <span>RAG</span>
+              <div className="folder-panel-body" style={{ display: folderPanelTab === "terminal" && terminalVisible ? "flex" : "none" }}>
+                <Terminal
+                  cwd={folderPath ?? "C:\\"}
+                  visible={terminalVisible && folderPanelTab === "terminal"}
+                  theme={theme}
+                />
               </div>
-              <RagPanel
-                folderPath={folderPath}
-                embeddingStatus={rag.embeddingStatus}
-                embeddingProgress={rag.embeddingProgress}
-                embeddingError={rag.embeddingError}
-                indexStatus={rag.indexStatus}
-                indexInfo={rag.indexInfo}
-                indexProgress={rag.indexProgress}
-                messages={rag.messages}
-                querying={rag.querying}
-                onBuildIndex={rag.buildIndex}
-                onDeleteIndex={rag.deleteIndex}
-                onAskQuestion={rag.askQuestion}
-                onClearMessages={rag.clearMessages}
-                onLoadModel={rag.loadModel}
-                onOpenFile={handleRagOpenFile}
-              />
+              <div className="folder-panel-body" style={{ display: folderPanelTab === "rag" && ragVisible ? "flex" : "none" }}>
+                <RagPanel
+                  folderPath={folderPath}
+                  embeddingStatus={rag.embeddingStatus}
+                  embeddingProgress={rag.embeddingProgress}
+                  embeddingError={rag.embeddingError}
+                  indexStatus={rag.indexStatus}
+                  indexInfo={rag.indexInfo}
+                  indexProgress={rag.indexProgress}
+                  messages={rag.messages}
+                  querying={rag.querying}
+                  onBuildIndex={rag.buildIndex}
+                  onDeleteIndex={rag.deleteIndex}
+                  onAskQuestion={rag.askQuestion}
+                  onClearMessages={rag.clearMessages}
+                  onLoadModel={rag.loadModel}
+                  onOpenFile={handleRagOpenFile}
+                />
+              </div>
             </div>
           </>
         )}
